@@ -1,0 +1,25 @@
+# Node modules
+taskbazaar-backend/node_modules/
+taskbazaar-client/node_modules/
+
+# Environment variables
+taskbazaar-backend/.env
+taskbazaar-client/.env
+
+# Build folders
+taskbazaar-client/dist/
+taskbazaar-backend/build/
+
+# Logs
+*.log
+
+# OS/system files
+.DS_Store
+Thumbs.db
+
+# Vite cache
+taskbazaar-client/.vite
+
+# Editor-specific
+.vscode/
+.idea/
