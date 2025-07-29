@@ -10,9 +10,7 @@ taskbazaar/
 ├── taskbazaar-backend # Express.js + MongoDB backend
 └── taskbazaar-client # React (Vite) + Tailwind frontend
 
-yaml
-Copy
-Edit
+
 
 ---
 
