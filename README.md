@@ -92,3 +92,5 @@ Make sure both backend and frontend are running in their respective folders:
 📦 JWT authentication
 
 🧩 Modular structure for scaling
+
+The creation of tasks is happening at backend but it not at frontend for now
