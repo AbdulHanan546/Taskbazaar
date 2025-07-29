@@ -16,7 +16,7 @@ taskbazaar/
 
 ## 🧑‍💻 1. Clone and Setup the Project
 
-git clone https://github.com/your-username/taskbazaar.git
+git clone https://github.com/AbdulHanan546/taskbazaar.git
 cd taskbazaar
 ⚙️ 2. Backend Setup
 Navigate:
