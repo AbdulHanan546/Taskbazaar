@@ -1,14 +1,14 @@
-# 🧰 TaskBazaar
+# 🧰 TaskBazaar (Mobile App Version)
 
-TaskBazaar is a full-stack MERN application that connects users with local service providers for home, business, and personal tasks.
+**TaskBazaar** is a full-stack MERN (MongoDB, Express.js, React Native, Node.js) mobile application that connects users with local service providers for home, business, and personal tasks.
 
 ---
 
-## 📁 Project Structure
+## 📦 Project Structure
 
 taskbazaar/
 ├── taskbazaar-backend # Express.js + MongoDB backend
-└── taskbazaar-client # React (Vite) + Tailwind frontend
+└── taskbazaar-app # React Native frontend using Expo
 
 
 
@@ -16,89 +16,120 @@ taskbazaar/
 
 ## 🧑‍💻 1. Clone and Setup the Project
 
-git clone https://github.com/AbdulHanan546/taskbazaar.git
 
+git clone https://github.com/AbdulHanan546/taskbazaar.git
 cd taskbazaar
 ⚙️ 2. Backend Setup
-Navigate:
+📂 Navigate:
 
 cd taskbazaar-backend
-Install dependencies:
+📥 Install dependencies:
 
 npm install
-
-Required libraries:
+🔧 Required libraries:
 express
+
 mongoose
+
 cors
+
 dotenv
+
 jsonwebtoken
+
 bcryptjs
 
-nodemon (for dev)
-
-Install all with:
-
+nodemon (for development)
 
 npm install express mongoose cors dotenv jsonwebtoken bcryptjs
+
 npm install --save-dev nodemon
+🔐 Create .env file
+The .env file is not pushed to GitHub (it's in .gitignore). Create it manually inside taskbazaar-backend/.
 
-Add your .env file:
-🔐 Note: .env is ignored in .gitignore. You need to create your own.
-
-Create a .env file in taskbazaar-backend/ and add:
+Example:
 
 
 PORT=5000
 
-MONGO_URI=your_mongodb_uri
+MONGO_URI=your_mongodb_connection_string
 
-JWT_SECRET=your_jwt_secret
+JWT_SECRET=your_secret_key
 
-Run backend:
+▶️ Run Backend Server:
 
 npm run dev
+📱 3. React Native App Setup (Frontend)
+📂 Navigate:
 
-💻 3. Frontend Setup
-Navigate:
+cd taskbazaar-app
+✅ Prerequisites
+Node.js (v16+)
 
-cd taskbazaar-client
+Expo CLI:
 
-Install dependencies:
+
+npm install -g expo-cli
+
+Expo Go App installed on your Android/iOS device
+
+📥 Install dependencies:
 
 npm install
-
-Required libraries:
-react-router-dom
+📚 Required libraries:
 axios
-framer-motion
-tailwindcss
 
-Install all with:
+@react-navigation/native
 
-for tailwindcss visit their official site and follow the steps to install it
+@react-navigation/native-stack
 
-npm install react-router-dom axios framer-motion
+@react-native-async-storage/async-storage
 
+react-native-screens, react-native-safe-area-context, react-native-vector-icons (auto-installed via Expo)
 
-Run frontend:
+expo, react-native, expo-status-bar
 
-npm run dev
-✅ Run Both Together
-
-Make sure both backend and frontend are running in their respective folders:
+Install navigation-related dependencies:
 
 
 
-🌙 Features So Far
-🔐 Login / Register pages
+npm install @react-navigation/native @react-navigation/native-stack
 
-🎨 Tailwind CSS-based UI with Dark Mode toggle
+npm install @react-native-async-storage/async-storage
 
-🚀 API connected to MongoDB
+▶️ Run Frontend (Expo):
 
-📦 JWT authentication
 
-🧩 Modular structure for scaling
+npm start
+You will see a QR code in the terminal. Scan it with the Expo Go app on your phone.
 
-The creation of tasks is happening at backend but it not at frontend for now
+If you're on Android: Use Expo Go App
+If you're on iOS: Use the Camera app to scan
+
+🚧 Trouble Connecting Backend with Mobile?
+If the app hangs on loading:
+
+✅ Make sure both devices are on the same WiFi network.
+✅ Replace all instances of localhost or 127.0.0.1 in frontend API calls with your machine’s local IP address (e.g., 192.168.10.13):
+
+
+// Example
+axios.post('http://192.168.10.13:5000/api/auth/login', { ... });
+🔥 Disable Public Network Firewall (Windows)
+If you’re on Windows, disable Public Network firewall:
+
+Open Windows Security
+
+Go to Firewall & Network Protection
+
+Click Public Network
+
+Turn firewall OFF (temporarily for testing)
+
+🌟 Features Implemented
+✅ User Registration and Login using JWT
+✅ Tasks: Create task (title, description, location)
+✅ Dashboard: View greeting and create tasks
+✅ Modular backend using Express.js + MongoDB
+✅ Secure routes with JWT token stored using AsyncStorage
+✅ Styled UI with basic component layout for mobile
