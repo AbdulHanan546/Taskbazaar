@@ -2,16 +2,23 @@ const Task = require('../models/Task');
 
 exports.createTask = async (req, res) => {
   const { title, description, location } = req.body;
-  console.log('Request body:', req.body);
-  console.log('User:', req.user); // this should contain user.id
+  const imagePaths = req.files ? req.files.map(file => file.filename) : [];
 
   try {
-    const task = await Task.create({ title, description, location, user: req.user.id });
+    const task = await Task.create({
+      title,
+      description,
+      location,
+      user: req.user.id,
+      images: imagePaths,
+    });
+
     res.status(201).json(task);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 exports.getTasks = async (req, res) => {
   try {

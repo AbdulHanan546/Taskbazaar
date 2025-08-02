@@ -9,7 +9,7 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     try {
-      const res = await axios.post('http://192.168.10.13:5000/api/auth/login', { email, password });
+      const res = await axios.post('http://192.168.10.15:5000/api/auth/login', { email, password });
       const { token, user } = res.data;
       await AsyncStorage.setItem('token', token);
       await AsyncStorage.setItem('user', JSON.stringify(user));

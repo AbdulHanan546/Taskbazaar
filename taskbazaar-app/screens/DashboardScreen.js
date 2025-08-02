@@ -4,6 +4,8 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
 
 export default function DashboardScreen() {
   const [name, setName] = useState('');
@@ -11,6 +13,19 @@ export default function DashboardScreen() {
   const [desc, setDesc] = useState('');
   const [location, setLocation] = useState('');
   const [tasks, setTasks] = useState([]);
+  const [images, setImages] = useState([]);
+
+const pickImage = async () => {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsMultipleSelection: true,
+    quality: 1,
+  });
+
+  if (!result.canceled) {
+    setImages([...images, result.assets[0]]);
+  }
+};
 
   useEffect(() => {
     const fetchUserInfo = async () => {
@@ -28,7 +43,7 @@ export default function DashboardScreen() {
   const fetchTasks = async () => {
     const token = await AsyncStorage.getItem('token');
     try {
-      const res = await axios.get('http://192.168.10.13:5000/api/tasks/my', {
+      const res = await axios.get('http://192.168.10.15:5000/api/tasks/my', {
         headers: { Authorization: `Bearer ${token}` },
       });
       setTasks(res.data);
@@ -38,35 +53,54 @@ export default function DashboardScreen() {
   };
 
   const handlePostTask = async () => {
-    const token = await AsyncStorage.getItem('token');
-    try {
-      await axios.post(
-        'http://192.168.10.13:5000/api/tasks',
-        {
-          title,
-          description: desc,
-          location,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      Alert.alert('Success', 'Task posted successfully!');
-      setTitle('');
-      setDesc('');
-      setLocation('');
-      fetchTasks(); // refresh tasks list
-    } catch (err) {
-      Alert.alert('Error', err.response?.data?.error || 'Failed to post task');
-    }
-  };
+  const token = await AsyncStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('title', title);
+  formData.append('description', desc);
+  formData.append('location', location);
+
+  images.forEach((img, index) => {
+    formData.append('images', {
+      uri: img.uri,
+      name: `image_${index}.jpg`,
+      type: 'image/jpeg',
+    });
+  });
+
+  try {
+    await axios.post('http://192.168.10.15:5000/api/tasks', formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    Alert.alert('Success', 'Task posted successfully!');
+    setTitle('');
+    setDesc('');
+    setLocation('');
+    setImages([]);
+    fetchTasks();
+  } catch (err) {
+    Alert.alert('Error', err.response?.data?.error || 'Failed to post task');
+  }
+};
+
 
   const renderTask = ({ item }) => (
     <View style={styles.taskCard}>
-      <Text style={styles.taskTitle}>{item.title}</Text>
-      <Text>{item.description}</Text>
-      <Text style={styles.taskLocation}>📍 {item.location}</Text>
-    </View>
+  <Text style={styles.taskTitle}>{item.title}</Text>
+  <Text>{item.description}</Text>
+  <Text style={styles.taskLocation}>📍 {item.location}</Text>
+  {item.images?.map((img, idx) => (
+    <Image
+      key={idx}
+      source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
+      style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
+      resizeMode="cover"
+    />
+  ))}
+</View>
   );
 
   return (
@@ -92,6 +126,17 @@ export default function DashboardScreen() {
         onChangeText={setLocation}
         placeholder="Enter location"
       />
+      <Button title="Pick Image" onPress={pickImage} />
+<View style={{ flexDirection: 'row', marginTop: 10 }}>
+  {images.map((img, i) => (
+    <Image
+      key={i}
+      source={{ uri: img.uri }}
+      style={{ width: 60, height: 60, marginRight: 10 }}
+    />
+  ))}
+</View>
+
       <Button title="Post Task" onPress={handlePostTask} />
 
       <Text style={styles.sectionTitle}>Your Posts</Text>
