@@ -16,6 +16,10 @@ export default function LandingScreen({ navigation }) {
         style={[styles.button, { backgroundColor: '#6366F1' }]}>
         <Text style={styles.buttonText}>Register</Text>
       </TouchableOpacity>
+      <TouchableOpacity onPress={() => navigation.navigate('ProviderRegister')}
+        style={[styles.button, { backgroundColor: '#6366F1' }]}>
+        <Text style={styles.buttonText}>Register as Provider</Text>
+      </TouchableOpacity>
     </View>
   );
 }

@@ -1,39 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, Button, Alert, StyleSheet, FlatList, ScrollView
+  View, Text, TextInput, Button, Alert, StyleSheet, FlatList, ScrollView, Dimensions,TouchableOpacity
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
 import { Image } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+const { width, height } = Dimensions.get('window');
 
 export default function DashboardScreen() {
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState(null);
+  const [mapRegion, setMapRegion] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [images, setImages] = useState([]);
+  const mapRef = useRef(null);
+  const navigation = useNavigation();
 
-const pickImage = async () => {
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsMultipleSelection: true,
-    quality: 1,
-  });
-
-  if (!result.canceled) {
-    setImages([...images, result.assets[0]]);
+const logout = async (navigation) => {
+  try {
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('user');
+    navigation.replace('Login'); // or navigate, depending on your navigation setup
+  } catch (err) {
+    console.log('Logout error:', err);
   }
 };
 
   useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required.');
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({});
+      const coords = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+
+      setLocation({ latitude: coords.latitude, longitude: coords.longitude });
+      setMapRegion(coords);
+    })();
+
     const fetchUserInfo = async () => {
       const storedUser = await AsyncStorage.getItem('user');
       if (storedUser) {
         const user = JSON.parse(storedUser);
         setName(user.name);
-        fetchTasks(); // fetch tasks after setting name
+        fetchTasks();
       }
     };
 
@@ -52,12 +76,37 @@ const pickImage = async () => {
     }
   };
 
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImages([...images, result.assets[0]]);
+    }
+  };
+
   const handlePostTask = async () => {
   const token = await AsyncStorage.getItem('token');
+
+  if (!location || !location.latitude || !location.longitude) {
+    Alert.alert('Error', 'Please select a location on the map.');
+    return;
+  }
+console.log('Sending location:', location);
+
   const formData = new FormData();
   formData.append('title', title);
   formData.append('description', desc);
-  formData.append('location', location);
+ formData.append(
+  'location',
+  JSON.stringify({
+    latitude: location.latitude,
+    longitude: location.longitude,
+  })
+);
 
   images.forEach((img, index) => {
     formData.append('images', {
@@ -78,7 +127,7 @@ const pickImage = async () => {
     Alert.alert('Success', 'Task posted successfully!');
     setTitle('');
     setDesc('');
-    setLocation('');
+    setLocation(null);
     setImages([]);
     fetchTasks();
   } catch (err) {
@@ -89,18 +138,20 @@ const pickImage = async () => {
 
   const renderTask = ({ item }) => (
     <View style={styles.taskCard}>
-  <Text style={styles.taskTitle}>{item.title}</Text>
-  <Text>{item.description}</Text>
-  <Text style={styles.taskLocation}>📍 {item.location}</Text>
-  {item.images?.map((img, idx) => (
-    <Image
-      key={idx}
-      source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
-      style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
-      resizeMode="cover"
-    />
-  ))}
-</View>
+      <Text style={styles.taskTitle}>{item.title}</Text>
+      <Text>{item.description}</Text>
+      <Text style={styles.taskLocation}>
+        📍 {item.location?.coordinates?.join(', ')}
+      </Text>
+      {item.images?.map((img, idx) => (
+        <Image
+          key={idx}
+          source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
+          style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
+          resizeMode="cover"
+        />
+      ))}
+    </View>
   );
 
   return (
@@ -120,22 +171,44 @@ const pickImage = async () => {
         onChangeText={setDesc}
         placeholder="Enter task description"
       />
-      <TextInput
-        style={styles.input}
-        value={location}
-        onChangeText={setLocation}
-        placeholder="Enter location"
-      />
+
+      <Text style={styles.sectionTitle}>📍 Select Location</Text>
+      {mapRegion && (
+        <View style={styles.mapContainer}>
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            initialRegion={mapRegion}
+            onRegionChangeComplete={(region) => {
+              setLocation({
+                latitude: region.latitude,
+                longitude: region.longitude,
+              });
+            }}
+          />
+          {/* Center pointer */}
+          <View style={styles.mapPin} pointerEvents="none">
+            <Text style={{ fontSize: 28 }}>📍</Text>
+          </View>
+        </View>
+      )}
+
+      {location && (
+        <Text style={{ color: 'gray', marginTop: 5 }}>
+          Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+        </Text>
+      )}
+
       <Button title="Pick Image" onPress={pickImage} />
-<View style={{ flexDirection: 'row', marginTop: 10 }}>
-  {images.map((img, i) => (
-    <Image
-      key={i}
-      source={{ uri: img.uri }}
-      style={{ width: 60, height: 60, marginRight: 10 }}
-    />
-  ))}
-</View>
+      <View style={{ flexDirection: 'row', marginTop: 10 }}>
+        {images.map((img, i) => (
+          <Image
+            key={i}
+            source={{ uri: img.uri }}
+            style={{ width: 60, height: 60, marginRight: 10 }}
+          />
+        ))}
+      </View>
 
       <Button title="Post Task" onPress={handlePostTask} />
 
@@ -146,7 +219,12 @@ const pickImage = async () => {
         renderItem={renderTask}
         scrollEnabled={false}
       />
+      <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
+  <Text style={styles.logoutText}>Logout</Text>
+</TouchableOpacity>
+
     </ScrollView>
+    
   );
 }
 
@@ -193,4 +271,35 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontStyle: 'italic',
   },
+  mapContainer: {
+  height: 300,
+  marginVertical: 10,
+  width: '95%',             // reduce width
+  alignSelf: 'center',      // center the map
+  borderRadius: 12,
+  overflow: 'hidden',       // clip map corners
+},
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapPin: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -14,
+    marginTop: -34,
+    zIndex: 10,
+  },
+  logoutBtn: {
+  backgroundColor: '#ef4444',
+  padding: 10,
+  borderRadius: 6,
+  alignItems: 'center',
+  marginVertical: 10,
+},
+logoutText: {
+  color: '#fff',
+  fontWeight: 'bold',
+}
+
 });

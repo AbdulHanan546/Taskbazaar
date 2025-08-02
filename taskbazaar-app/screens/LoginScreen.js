@@ -8,16 +8,28 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
 
   const handleLogin = async () => {
-    try {
-      const res = await axios.post('http://192.168.10.15:5000/api/auth/login', { email, password });
-      const { token, user } = res.data;
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      navigation.navigate('Dashboard');
-    } catch (err) {
-      Alert.alert('Login failed', err.response?.data?.message || 'An error occurred');
+  try {
+    const res = await axios.post('http://192.168.10.15:5000/api/auth/login', {
+      email,
+      password,
+    });
+
+    const { token, user } = res.data;
+
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(user)); // Store role
+
+    if (user.role === 'provider') {
+      navigation.replace('ProviderDashboard'); // ✅ Go to Provider Dashboard
+    } else {
+      navigation.replace('Dashboard'); // Or your normal user dashboard
     }
-  };
+  } catch (err) {
+    console.error(err);
+    Alert.alert('Login Failed', err.response?.data?.message || 'Please try again');
+  }
+};
+
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', padding: 20 }}>
