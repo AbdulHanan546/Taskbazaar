@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    #map {
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    let map;
+    let markers = [];
+    let providerLocationMarker;
+
+    function initMap(providerLocation, tasks) {
+      if (map) return; // Prevent re-initializing the map
+
+      const { latitude, longitude } = providerLocation;
+
+      map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: latitude, lng: longitude },
+        zoom: 12,
+      });
+
+      // Add a marker for the user's current location
+      providerLocationMarker = new google.maps.Marker({
+        position: { lat: latitude, lng: longitude },
+        map: map,
+        title: "Your Location",
+        icon: {
+          url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+        }
+      });
+      
+      // Add a listener for clicks to manually select a new location
+      map.addListener("click", (event) => {
+        const coords = {
+          latitude: event.latLng.lat(),
+          longitude: event.latLng.lng()
+        };
+        // Send the new coordinates back to the React Native app
+        window.ReactNativeWebView.postMessage(JSON.stringify(coords));
+      });
+
+      // Update the markers on the map
+      updateMarkers(tasks);
+    }
+    
+    // A function to update the map markers
+    function updateMarkers(tasks) {
+      markers.forEach(marker => marker.setMap(null));
+      markers = tasks.map(task => {
+        return new google.maps.Marker({
+          position: { lat: task.latitude, lng: task.longitude },
+          map: map,
+          title: task.title,
+          icon: {
+            url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+          }
+        });
+      });
+    }
+
+    // This function will be called from React Native to update the map with new tasks
+    function setMapTasks(tasks) {
+        if (map) {
+            updateMarkers(tasks);
+        }
+    }
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBT3R-epFLAJsC2a_5_7Qg3GH0llfE4QJg&callback=() => {}" async defer></script>
+</body>
+</html>
