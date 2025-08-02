@@ -74,6 +74,11 @@ const navigation = useNavigation();
   <View style={styles.taskCard}>
     <Text style={styles.taskTitle}>{item.title}</Text>
     <Text>{item.description}</Text>
+
+    <Text style={{ fontWeight: '600', marginTop: 6 }}>
+      Budget: PKR {item.budget}
+    </Text>
+
     <Text style={styles.locationText}>
       📍 {item.location?.coordinates?.join(', ') || 'Unknown'}
     </Text>
@@ -82,7 +87,7 @@ const navigation = useNavigation();
       <Image
         key={idx}
         source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
-        style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 8 }}
+        style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
         resizeMode="cover"
       />
     ))}
@@ -95,6 +100,7 @@ const navigation = useNavigation();
     </TouchableOpacity>
   </View>
 );
+
 
 
   if (loading || !location) {

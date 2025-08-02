@@ -3,6 +3,7 @@ const User = require('../models/User')
 exports.createTask = async (req, res) => {
   const imagePaths = req.files ? req.files.map(file => file.filename) : [];
   let parsedLocation;
+console.log("Received BUDGET type & value:", typeof req.body.budget, req.body.budget);
 
   try {
     parsedLocation = JSON.parse(req.body.location);
@@ -23,6 +24,7 @@ exports.createTask = async (req, res) => {
         coordinates: [parsedLocation.longitude, parsedLocation.latitude], // Mongo expects [lng, lat]
       },
       user: req.user.id,
+      budget: parseFloat(req.body.budget),
       images: imagePaths,
     });
 

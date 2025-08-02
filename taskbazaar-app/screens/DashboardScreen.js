@@ -20,6 +20,8 @@ export default function DashboardScreen() {
   const [tasks, setTasks] = useState([]);
   const [images, setImages] = useState([]);
   const mapRef = useRef(null);
+  const [budget, setBudget] = useState('');
+
   const navigation = useNavigation();
 
 const logout = async (navigation) => {
@@ -107,6 +109,8 @@ console.log('Sending location:', location);
     longitude: location.longitude,
   })
 );
+formData.append('budget', budget);
+
 
   images.forEach((img, index) => {
     formData.append('images', {
@@ -130,6 +134,7 @@ console.log('Sending location:', location);
     setLocation(null);
     setImages([]);
     fetchTasks();
+    setBudget(''); // ✅ reset after post
   } catch (err) {
     Alert.alert('Error', err.response?.data?.error || 'Failed to post task');
   }
@@ -140,6 +145,9 @@ console.log('Sending location:', location);
     <View style={styles.taskCard}>
       <Text style={styles.taskTitle}>{item.title}</Text>
       <Text>{item.description}</Text>
+      <Text style={{ fontWeight: '600', marginTop: 6 }}>
+  Budget: PKR{item.budget}
+</Text>
       <Text style={styles.taskLocation}>
         📍 {item.location?.coordinates?.join(', ')}
       </Text>
@@ -171,6 +179,13 @@ console.log('Sending location:', location);
         onChangeText={setDesc}
         placeholder="Enter task description"
       />
+       <TextInput
+  style={styles.input}
+  value={budget}
+  onChangeText={setBudget}
+  keyboardType="numeric"
+  placeholder="Enter budget (PKR)"
+/>
 
       <Text style={styles.sectionTitle}>📍 Select Location</Text>
       {mapRegion && (
