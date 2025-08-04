@@ -21,7 +21,6 @@ const emailTemplates = {
         <p>The provider will contact you soon to discuss the details and schedule.</p>
         <p>Thank you for using TaskBazaar!</p>
         <br>
-        <p style="color: #666; font-size: 12px;">This is an automated notification from TaskBazaar.</p>
       </div>
     `
   }),

@@ -175,9 +175,9 @@ exports.updateTaskStatus = async (req, res) => {
 exports.acceptTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    
+
     const task = await Task.findById(taskId).populate('user', 'email name');
-    
+
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -186,18 +186,21 @@ exports.acceptTask = async (req, res) => {
       return res.status(400).json({ error: 'Task is not available for assignment' });
     }
 
-    // Update task status to assigned
+    // Update task
     task.status = 'assigned';
     task.provider = req.user.id;
     await task.save();
 
-    // Send email notification to task poster
+    // Fetch provider details
+    const provider = await User.findById(req.user.id);
+
+    // Send email notification
     let emailSent = false;
-    if (task.user.email) {
+    if (task.user.email && provider?.name) {
       emailSent = await sendTaskAssignedNotification(
         task.user.email,
         task.title,
-        req.user.name
+        provider.name
       );
     }
 
@@ -212,4 +215,3 @@ exports.acceptTask = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-

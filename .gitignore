@@ -23,3 +23,5 @@ taskbazaar-client/.vite
 # Editor-specific
 .vscode/
 .idea/
+
+.env
