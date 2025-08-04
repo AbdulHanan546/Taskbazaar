@@ -13,6 +13,23 @@ export default function ProviderDashboardScreen() {
   const [location, setLocation] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [assignedTasks, setAssignedTasks] = useState([]);
+  const [showAssigned, setShowAssigned] = useState(false);
+
+const fetchAssignedTasks = async () => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    const res = await axios.get('http://192.168.10.15:5000/api/tasks/assigned', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    setAssignedTasks(res.data);
+  } catch (err) {
+    console.error('Error fetching assigned tasks:', err);
+  }
+};
+
 const logout = async (navigation) => {
   try {
     await AsyncStorage.removeItem('token');
@@ -116,7 +133,83 @@ const logout = async (navigation) => {
 
   useEffect(() => {
     fetchNearbyTasks();
+    fetchAssignedTasks();
   }, [location]);
+const updateTaskStatus = async (taskId, newStatus) => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    const res = await axios.put(
+      `http://192.168.10.15:5000/api/tasks/${taskId}/status`,
+      { status: newStatus },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    Alert.alert('Success', `Task marked as ${newStatus}`);
+    fetchAssignedTasks(); // refresh assigned list
+  } catch (error) {
+    console.error('Status update failed:', error);
+    Alert.alert('Error', error.response?.data?.error || 'Failed to update task status');
+  }
+};
+const renderAssignedTask = ({ item }) => (
+  <View style={styles.taskCard}>
+    <View style={styles.taskHeader}>
+      <Text style={styles.taskTitle}>{item.title}</Text>
+      <View style={[
+        styles.statusBadge,
+        {
+          backgroundColor: item.status === 'assigned' ? '#3B82F6'
+                          : item.status === 'completed' ? '#059669'
+                          : item.status === 'cancelled' ? '#EF4444' : '#10B981'
+        }
+      ]}>
+        <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+      </View>
+    </View>
+
+    <Text>{item.description}</Text>
+
+    <Text style={{ fontWeight: '600', marginTop: 6 }}>
+      Budget: PKR {item.budget}
+    </Text>
+
+    <Text style={styles.locationText}>
+      📍 {item.location?.coordinates?.join(', ') || 'Unknown'}
+    </Text>
+
+    {item.images?.map((img, idx) => (
+      <Image
+        key={idx}
+        source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
+        style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
+        resizeMode="cover"
+      />
+    ))}
+
+    {/* Buttons for actions */}
+    {item.status === 'assigned' && (
+      <View style={{ flexDirection: 'row', marginTop: 10 }}>
+        <TouchableOpacity
+          style={[styles.statusButton, { backgroundColor: '#059669', marginRight: 10 }]}
+          onPress={() => updateTaskStatus(item._id, 'completed')}
+        >
+          <Text style={styles.statusButtonText}>Mark Completed</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.statusButton, { backgroundColor: '#EF4444' }]}
+          onPress={() => updateTaskStatus(item._id, 'cancelled')}
+        >
+          <Text style={styles.statusButtonText}>Cancel Task</Text>
+        </TouchableOpacity>
+      </View>
+    )}
+  </View>
+);
 
   const renderTask = ({ item }) => (
   <View style={styles.taskCard}>
@@ -175,40 +268,63 @@ const logout = async (navigation) => {
   return (
     
     <View style={styles.container}>
-      <Text style={styles.header}>Nearby Tasks</Text>
-      
-      <MapView
-        style={styles.map}
-        initialRegion={{
-          ...location,
-          latitudeDelta: 0.03,
-          longitudeDelta: 0.03,
+  <Text style={styles.header}>Nearby Tasks</Text>
+
+  <MapView
+    style={styles.map}
+    initialRegion={{
+      ...location,
+      latitudeDelta: 0.03,
+      longitudeDelta: 0.03,
+    }}
+  >
+    <Marker coordinate={location} pinColor="blue" />
+    {tasks.map((task) => (
+      <Marker
+        key={task._id}
+        coordinate={{
+          latitude: task.location.coordinates[1],
+          longitude: task.location.coordinates[0],
         }}
-      >
-        <Marker coordinate={location} pinColor="blue" />
-        {tasks.map((task) => (
-          <Marker
-            key={task._id}
-            coordinate={{
-              latitude: task.location.coordinates[1],
-              longitude: task.location.coordinates[0],
-            }}
-            title={task.title}
-            description={task.description}
-          />
-        ))}
-      </MapView>
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item._id}
-        renderItem={renderTask}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        title={task.title}
+        description={task.description}
       />
-      <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
-  <Text style={styles.logoutText}>Logout</Text>
-</TouchableOpacity>
+    ))}
+  </MapView>
+
+  <FlatList
+    data={tasks}
+    keyExtractor={(item) => item._id}
+    renderItem={renderTask}
+    contentContainerStyle={{ paddingBottom: 40 }}
+  />
+
+  <TouchableOpacity
+    onPress={() => setShowAssigned(!showAssigned)}
+    style={styles.toggleAssignedBtn}
+  >
+    <Text style={styles.toggleAssignedText}>
+      {showAssigned ? 'Hide' : 'View'} Assigned Tasks
+    </Text>
+  </TouchableOpacity>
+
+  {showAssigned && (
+    <View style={styles.assignedContainer}>
+      <Text style={styles.subHeader}>Your Assigned Tasks</Text>
+      <FlatList
+        data={assignedTasks}
+        keyExtractor={(item) => item._id}
+        renderItem={renderAssignedTask}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      />
     </View>
-  );
+  )}
+
+  <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
+    <Text style={styles.logoutText}>Logout</Text>
+  </TouchableOpacity>
+</View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -217,6 +333,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     padding: 10,
   },
+  toggleAssignedBtn: {
+  backgroundColor: '#3b82f6',
+  padding: 12,
+  borderRadius: 8,
+  alignItems: 'center',
+  marginVertical: 10,
+},
+
+toggleAssignedText: {
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: 16,
+},
+
+assignedContainer: {
+  backgroundColor: '#f9fafb',
+  borderRadius: 10,
+  padding: 10,
+  marginTop: 10,
+},
+
+subHeader: {
+  fontSize: 18,
+  fontWeight: 'bold',
+  marginBottom: 10,
+}
+,
   header: {
     fontSize: 22,
     fontWeight: 'bold',
@@ -286,6 +429,17 @@ statusText: {
   color: '#fff',
   fontSize: 10,
   fontWeight: 'bold',
+},
+statusButton: {
+  padding: 10,
+  borderRadius: 6,
+  flex: 1,
+  alignItems: 'center',
+},
+statusButtonText: {
+  color: '#fff',
+  fontWeight: 'bold',
 }
+
 
 });

@@ -16,7 +16,7 @@ const taskSchema = new mongoose.Schema({
 },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   provider: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  status: { type: String, enum: ['open', 'assigned', 'completed'], default: 'open' },
+  status: { type: String, enum: ['open', 'assigned', 'completed','cancelled'], default: 'open' },
     budget: Number,
   images: [String], // <-- Add this line
 }, { timestamps: true });

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createTask, getTasks, getUserTasks, getNearbyTasks, updateTaskStatus, acceptTask } = require('../controllers/taskController');
+const { createTask, getTasks, getUserTasks, getNearbyTasks, updateTaskStatus, acceptTask,getAssignedTasks } = require('../controllers/taskController');
 const auth = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
 
@@ -11,5 +11,5 @@ router.get('/nearby', auth, getNearbyTasks);
 // New routes for task status updates and acceptance
 router.put('/:taskId/status', auth, updateTaskStatus);
 router.post('/:taskId/accept', auth, acceptTask);
-
+router.get('/assigned', auth, getAssignedTasks);
 module.exports = router;

@@ -215,3 +215,16 @@ exports.acceptTask = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.getAssignedTasks = async (req, res) => {
+  try {
+    const tasks = await Task.find({
+      provider: req.user.id,
+      status: { $in: ['assigned', 'completed'] }
+    }).sort({ createdAt: -1 });
+
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
