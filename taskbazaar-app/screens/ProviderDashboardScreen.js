@@ -22,7 +22,55 @@ const logout = async (navigation) => {
     console.log('Logout error:', err);
   }
 };
-const navigation = useNavigation();
+  const navigation = useNavigation();
+
+  const handleAcceptTask = async (taskId, taskTitle) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const response = await axios.post(
+        `http://192.168.10.15:5000/api/tasks/${taskId}/accept`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.emailSent) {
+        Alert.alert(
+          'Task Accepted!',
+          `You accepted "${taskTitle}". The task poster has been notified via email.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Refresh the task list
+                fetchNearbyTasks();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Task Accepted!',
+          `You accepted "${taskTitle}".`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Refresh the task list
+                fetchNearbyTasks();
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error accepting task:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to accept task');
+    }
+  };
 
   useEffect(() => {
     const loadLocation = async () => {
@@ -43,36 +91,46 @@ const navigation = useNavigation();
     loadLocation();
   }, []);
 
-  useEffect(() => {
-    const fetchNearbyTasks = async () => {
-      if (!location) return;
-      try {
-        const token = await AsyncStorage.getItem('token');
-        const res = await axios.get('http://192.168.10.15:5000/api/tasks/nearby', {
-          params: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            radius: 500,
-          },
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        setTasks(res.data);
-      } catch (err) {
-        console.error(err);
-        Alert.alert('Error', 'Failed to fetch tasks');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchNearbyTasks = async () => {
+    if (!location) return;
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const res = await axios.get('http://192.168.10.15:5000/api/tasks/nearby', {
+        params: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          radius: 500,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setTasks(res.data);
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to fetch tasks');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchNearbyTasks();
   }, [location]);
 
   const renderTask = ({ item }) => (
   <View style={styles.taskCard}>
-    <Text style={styles.taskTitle}>{item.title}</Text>
+    <View style={styles.taskHeader}>
+      <Text style={styles.taskTitle}>{item.title}</Text>
+      <View style={[
+        styles.statusBadge, 
+        { backgroundColor: item.status === 'open' ? '#10B981' : 
+                        item.status === 'assigned' ? '#3B82F6' : 
+                        item.status === 'completed' ? '#059669' : '#EF4444' }
+      ]}>
+        <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+      </View>
+    </View>
     <Text>{item.description}</Text>
 
     <Text style={{ fontWeight: '600', marginTop: 6 }}>
@@ -92,12 +150,14 @@ const navigation = useNavigation();
       />
     ))}
 
-    <TouchableOpacity
-      style={styles.acceptBtn}
-      onPress={() => Alert.alert('Task Accepted', `You accepted "${item.title}"`)}
-    >
-      <Text style={styles.acceptText}>Accept Task</Text>
-    </TouchableOpacity>
+    {item.status === 'open' && (
+      <TouchableOpacity
+        style={styles.acceptBtn}
+        onPress={() => handleAcceptTask(item._id, item.title)}
+      >
+        <Text style={styles.acceptText}>Accept Task</Text>
+      </TouchableOpacity>
+    )}
   </View>
 );
 
@@ -209,6 +269,22 @@ const styles = StyleSheet.create({
 },
 logoutText: {
   color: '#fff',
+  fontWeight: 'bold',
+},
+taskHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 8,
+},
+statusBadge: {
+  paddingHorizontal: 8,
+  paddingVertical: 4,
+  borderRadius: 12,
+},
+statusText: {
+  color: '#fff',
+  fontSize: 10,
   fontWeight: 'bold',
 }
 

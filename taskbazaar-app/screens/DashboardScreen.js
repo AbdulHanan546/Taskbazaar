@@ -140,14 +140,56 @@ formData.append('budget', budget);
   }
 };
 
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const response = await axios.put(
+        `http://192.168.10.15:5000/api/tasks/${taskId}/status`,
+        { status: newStatus },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.emailSent) {
+        Alert.alert(
+          'Status Updated!',
+          `Task status updated to ${newStatus}. Email notification sent.`,
+          [{ text: 'OK', onPress: () => fetchTasks() }]
+        );
+      } else {
+        Alert.alert(
+          'Status Updated!',
+          `Task status updated to ${newStatus}.`,
+          [{ text: 'OK', onPress: () => fetchTasks() }]
+        );
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to update task status');
+    }
+  };
+
 
   const renderTask = ({ item }) => (
     <View style={styles.taskCard}>
-      <Text style={styles.taskTitle}>{item.title}</Text>
+      <View style={styles.taskHeader}>
+        <Text style={styles.taskTitle}>{item.title}</Text>
+        <View style={[
+          styles.statusBadge, 
+          { backgroundColor: item.status === 'open' ? '#10B981' : 
+                          item.status === 'assigned' ? '#3B82F6' : 
+                          item.status === 'completed' ? '#059669' : '#EF4444' }
+        ]}>
+          <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+        </View>
+      </View>
       <Text>{item.description}</Text>
       <Text style={{ fontWeight: '600', marginTop: 6 }}>
-  Budget: PKR{item.budget}
-</Text>
+        Budget: PKR{item.budget}
+      </Text>
       <Text style={styles.taskLocation}>
         📍 {item.location?.coordinates?.join(', ')}
       </Text>
@@ -159,6 +201,24 @@ formData.append('budget', budget);
           resizeMode="cover"
         />
       ))}
+      
+      {/* Task Status Management Buttons */}
+      {item.status === 'assigned' && (
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
+            onPress={() => handleUpdateTaskStatus(item._id, 'completed')}
+          >
+            <Text style={styles.actionBtnText}>Mark Completed</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: '#EF4444' }]}
+            onPress={() => handleUpdateTaskStatus(item._id, 'cancelled')}
+          >
+            <Text style={styles.actionBtnText}>Cancel Task</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -312,9 +372,42 @@ const styles = StyleSheet.create({
   alignItems: 'center',
   marginVertical: 10,
 },
-logoutText: {
-  color: '#fff',
-  fontWeight: 'bold',
-}
+  logoutText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  taskHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 6,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  }
 
 });

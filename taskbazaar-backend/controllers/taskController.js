@@ -1,5 +1,10 @@
 const Task = require('../models/Task');
-const User = require('../models/User')
+const User = require('../models/User');
+const { 
+  sendTaskAssignedNotification, 
+  sendTaskCompletedNotification, 
+  sendTaskCancelledNotification 
+} = require('../services/emailService');
 exports.createTask = async (req, res) => {
   const imagePaths = req.files ? req.files.map(file => file.filename) : [];
   let parsedLocation;
@@ -92,6 +97,118 @@ exports.getNearbyTasks = async (req, res) => {
     res.json(tasks);
   } catch (err) {
     console.error('Nearby Task Fetch Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update task status and send email notification
+exports.updateTaskStatus = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { status, providerId } = req.body;
+
+    const task = await Task.findById(taskId).populate('user', 'email name');
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Check if user is authorized to update this task
+    if (task.user._id.toString() !== req.user.id && req.user.role !== 'provider') {
+      return res.status(403).json({ error: 'Not authorized to update this task' });
+    }
+
+    const oldStatus = task.status;
+    task.status = status;
+
+    // If assigning to a provider, populate provider info
+    if (status === 'assigned' && providerId) {
+      const provider = await User.findById(providerId);
+      if (provider) {
+        task.provider = providerId;
+      }
+    }
+
+    await task.save();
+
+    // Send email notification based on status change
+    let emailSent = false;
+    
+    if (status === 'assigned' && oldStatus === 'open') {
+      const provider = await User.findById(providerId);
+      if (provider && task.user.email) {
+        emailSent = await sendTaskAssignedNotification(
+          task.user.email, 
+          task.title, 
+          provider.name
+        );
+      }
+    } else if (status === 'completed' && oldStatus === 'assigned') {
+      if (task.user.email) {
+        emailSent = await sendTaskCompletedNotification(
+          task.user.email, 
+          task.title
+        );
+      }
+    } else if (status === 'cancelled') {
+      if (task.user.email) {
+        emailSent = await sendTaskCancelledNotification(
+          task.user.email, 
+          task.title
+        );
+      }
+    }
+
+    res.json({ 
+      task, 
+      emailSent,
+      message: `Task status updated to ${status}${emailSent ? ' and notification sent' : ''}`
+    });
+
+  } catch (err) {
+    console.error('Task Status Update Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Accept task (for providers)
+exports.acceptTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    
+    const task = await Task.findById(taskId).populate('user', 'email name');
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    if (task.status !== 'open') {
+      return res.status(400).json({ error: 'Task is not available for assignment' });
+    }
+
+    // Update task status to assigned
+    task.status = 'assigned';
+    task.provider = req.user.id;
+    await task.save();
+
+    // Send email notification to task poster
+    let emailSent = false;
+    if (task.user.email) {
+      emailSent = await sendTaskAssignedNotification(
+        task.user.email,
+        task.title,
+        req.user.name
+      );
+    }
+
+    res.json({ 
+      task, 
+      emailSent,
+      message: `Task accepted successfully${emailSent ? ' and notification sent' : ''}`
+    });
+
+  } catch (err) {
+    console.error('Task Acceptance Error:', err);
     res.status(500).json({ error: err.message });
   }
 };
