@@ -98,4 +98,4 @@
 - Unread message badges
 
 ## 🚀 Ready to Use!
-The chat system is now fully integrated into your TaskBazaar app. Users can start real-time conversations as soon as tasks are assigned! 
+The chat system is now fully integrated into  TaskBazaar app. Users can start real-time conversations as soon as tasks are assigned! 
