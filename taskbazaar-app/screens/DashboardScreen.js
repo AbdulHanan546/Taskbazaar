@@ -219,6 +219,20 @@ formData.append('budget', budget);
           </TouchableOpacity>
         </View>
       )}
+      
+      {/* Chat Button for assigned tasks */}
+      {item.status === 'assigned' && (
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: '#3B82F6', marginTop: 10 }]}
+          onPress={() => navigation.navigate('ChatScreen', { 
+            taskId: item._id, 
+            taskTitle: item.title,
+            otherParticipant: { name: 'Provider' }
+          })}
+        >
+          <Text style={styles.actionBtnText}>💬 Chat with Provider</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -294,9 +308,14 @@ formData.append('budget', budget);
         renderItem={renderTask}
         scrollEnabled={false}
       />
-      <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
-  <Text style={styles.logoutText}>Logout</Text>
-</TouchableOpacity>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity onPress={() => navigation.navigate('ChatList')} style={styles.chatBtn}>
+          <Text style={styles.chatBtnText}>💬 Messages</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
 
     </ScrollView>
     
@@ -375,6 +394,31 @@ const styles = StyleSheet.create({
   logoutText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  chatBtn: {
+    backgroundColor: '#10B981',
+    padding: 10,
+    borderRadius: 6,
+    flex: 1,
+    marginRight: 5,
+    alignItems: 'center',
+  },
+  chatBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  logoutBtn: {
+    backgroundColor: '#ef4444',
+    padding: 10,
+    borderRadius: 6,
+    flex: 1,
+    marginLeft: 5,
+    alignItems: 'center',
   },
   taskHeader: {
     flexDirection: 'row',

@@ -244,12 +244,24 @@ const renderAssignedTask = ({ item }) => (
     ))}
 
     {item.status === 'open' && (
-      <TouchableOpacity
-        style={styles.acceptBtn}
-        onPress={() => handleAcceptTask(item._id, item.title)}
-      >
-        <Text style={styles.acceptText}>Accept Task</Text>
-      </TouchableOpacity>
+      <View style={styles.taskActions}>
+        <TouchableOpacity
+          style={styles.acceptBtn}
+          onPress={() => handleAcceptTask(item._id, item.title)}
+        >
+          <Text style={styles.acceptText}>Accept Task</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.acceptBtn, { backgroundColor: '#3B82F6', marginLeft: 10 }]}
+          onPress={() => navigation.navigate('ChatScreen', { 
+            taskId: item._id, 
+            taskTitle: item.title,
+            otherParticipant: { name: 'Task Owner' }
+          })}
+        >
+          <Text style={styles.acceptText}>💬 Chat</Text>
+        </TouchableOpacity>
+      </View>
     )}
   </View>
 );
@@ -320,9 +332,14 @@ const renderAssignedTask = ({ item }) => (
     </View>
   )}
 
-  <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
-    <Text style={styles.logoutText}>Logout</Text>
-  </TouchableOpacity>
+  <View style={styles.buttonRow}>
+    <TouchableOpacity onPress={() => navigation.navigate('ChatList')} style={styles.chatBtn}>
+      <Text style={styles.chatBtnText}>💬 Messages</Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
+      <Text style={styles.logoutText}>Logout</Text>
+    </TouchableOpacity>
+  </View>
 </View>
   )
 }
@@ -398,6 +415,10 @@ subHeader: {
     color: '#fff',
     fontWeight: 'bold',
   },
+  taskActions: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -439,7 +460,32 @@ statusButton: {
 statusButtonText: {
   color: '#fff',
   fontWeight: 'bold',
-}
+},
+buttonRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginVertical: 10,
+},
+chatBtn: {
+  backgroundColor: '#10B981',
+  padding: 10,
+  borderRadius: 6,
+  flex: 1,
+  marginRight: 5,
+  alignItems: 'center',
+},
+chatBtnText: {
+  color: '#fff',
+  fontWeight: 'bold',
+},
+logoutBtn: {
+  backgroundColor: '#ef4444',
+  padding: 10,
+  borderRadius: 6,
+  flex: 1,
+  marginLeft: 5,
+  alignItems: 'center',
+},
 
 
 });
