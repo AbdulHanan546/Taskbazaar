@@ -25,6 +25,8 @@ export default function ChatScreen() {
 
   useEffect(() => {
     initializeChat();
+    console.log('Route Params:', route.params);
+
     return () => {
       if (socket) {
         socket.disconnect();

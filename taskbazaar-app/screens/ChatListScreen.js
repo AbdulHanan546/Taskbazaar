@@ -10,6 +10,19 @@ export default function ChatListScreen() {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
+const [currentUserId, setCurrentUserId] = useState(null);
+
+useEffect(() => {
+  const loadUser = async () => {
+    const userData = await AsyncStorage.getItem('user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      setCurrentUserId(user.id);
+    }
+  };
+
+  loadUser();
+}, []);
 
   useEffect(() => {
     fetchChats();
@@ -54,12 +67,17 @@ export default function ChatListScreen() {
     return 'No messages yet';
   };
 
-  const getOtherParticipant = (chat) => {
-    const currentUser = chat.participants.find(p => p._id === chat.currentUserId);
-    return chat.participants.find(p => p._id !== chat.currentUserId) || currentUser;
-  };
+ const getOtherParticipant = (chat) => {
+  return chat.participants.find(p => p._id !== currentUserId);
+};
 
   const renderChatItem = ({ item }) => {
+  console.log('💬 Chat item:', item);
+  console.log('🆔 Chat ID:', item._id);
+  console.log('📦 Task:', item.taskId);
+  console.log('📦 Task ID:', item.taskId?._id);
+  console.log('📦 Task Title:', item.taskId?.title);
+
     const otherParticipant = getOtherParticipant(item);
     const lastMessage = getLastMessage(item);
     const lastMessageTime = item.lastMessage ? formatTime(item.lastMessage) : '';
@@ -67,12 +85,15 @@ export default function ChatListScreen() {
     return (
       <TouchableOpacity
         style={styles.chatItem}
+
         onPress={() => navigation.navigate('ChatScreen', { 
-          chatId: item._id, 
+          chatId: item._id||item.id, 
           taskId: item.taskId._id,
           taskTitle: item.taskId.title,
           otherParticipant: otherParticipant
-        })}
+        })
+        
+      }
       >
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
@@ -111,11 +132,12 @@ export default function ChatListScreen() {
   };
 
   if (loading) {
+    if (currentUserId){
     return (
       <View style={styles.loadingContainer}>
         <Text>Loading chats...</Text>
       </View>
-    );
+    );}
   }
 
   return (

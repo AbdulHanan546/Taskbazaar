@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const connectDB = require('./config/db');
 const Chat = require('./models/Chat');
 const User = require('./models/User');
-
+const Task = require('./models/Task')
 dotenv.config();
 const app = express();
 const server = createServer(app);

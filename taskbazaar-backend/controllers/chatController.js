@@ -63,10 +63,16 @@ exports.getUserChats = async (req, res) => {
 };
 
 // Get chat messages
+const mongoose = require('mongoose');
+
 exports.getChatMessages = async (req, res) => {
   try {
     const { chatId } = req.params;
     const userId = req.user.id;
+
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat ID' });
+    }
 
     const chat = await Chat.findById(chatId).populate('participants', 'name');
     
@@ -92,20 +98,32 @@ exports.markAsRead = async (req, res) => {
     const { chatId } = req.params;
     const userId = req.user.id;
 
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat ID' });
+    }
+
     const chat = await Chat.findById(chatId);
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
 
-    // Mark unread messages as read
-    await Chat.updateMany(
-      { _id: chatId, 'messages.sender': { $ne: userId }, 'messages.read': false },
-      { $set: { 'messages.$[].read': true, unreadCount: 0 } }
-    );
+    // Only mark unread messages from others as read
+    let updated = false;
+    for (const message of chat.messages) {
+      if (message.sender.toString() !== userId && !message.read) {
+        message.read = true;
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      chat.unreadCount = 0;
+      await chat.save();
+    }
 
     res.json({ success: true });
   } catch (err) {
     console.error('Mark as read error:', err);
     res.status(500).json({ error: err.message });
   }
-}; 
+};

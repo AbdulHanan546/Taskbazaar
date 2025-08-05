@@ -190,9 +190,9 @@ const renderAssignedTask = ({ item }) => (
       />
     ))}
 
-    {/* Buttons for actions */}
+    {/* Action buttons */}
     {item.status === 'assigned' && (
-      <View style={{ flexDirection: 'row', marginTop: 10 }}>
+      <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' }}>
         <TouchableOpacity
           style={[styles.statusButton, { backgroundColor: '#059669', marginRight: 10 }]}
           onPress={() => updateTaskStatus(item._id, 'completed')}
@@ -201,15 +201,46 @@ const renderAssignedTask = ({ item }) => (
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.statusButton, { backgroundColor: '#EF4444' }]}
+          style={[styles.statusButton, { backgroundColor: '#EF4444', marginRight: 10 }]}
           onPress={() => updateTaskStatus(item._id, 'cancelled')}
         >
           <Text style={styles.statusButtonText}>Cancel Task</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.statusButton, { backgroundColor: '#3B82F6', marginTop: 10 }]}
+          onPress={async () => {
+                try {
+                  const token = await AsyncStorage.getItem('token');
+                  const res = await axios.get(`http://192.168.10.15:5000/api/chat/by-task/${item._id}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+          
+                  const chat = res.data;
+                  if (!chat || !chat._id) {
+                    Alert.alert('Chat not found for this task.');
+                    return;
+                  }
+          
+                  navigation.navigate('ChatScreen', {
+                    chatId: chat._id,
+                    taskId: item._id,
+                    taskTitle: item.title,
+                    otherParticipant: { name: 'Provider' }, // Update this with actual participant if needed
+                  });
+                } catch (err) {
+                  console.error('Error fetching chat:', err.message);
+                  Alert.alert('Error', 'Could not fetch chat for this task.');
+                }
+              }}
+        >
+          <Text style={styles.statusButtonText}>💬 Chat</Text>
         </TouchableOpacity>
       </View>
     )}
   </View>
 );
+
 
   const renderTask = ({ item }) => (
   <View style={styles.taskCard}>
@@ -253,11 +284,30 @@ const renderAssignedTask = ({ item }) => (
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.acceptBtn, { backgroundColor: '#3B82F6', marginLeft: 10 }]}
-          onPress={() => navigation.navigate('ChatScreen', { 
-            taskId: item._id, 
-            taskTitle: item.title,
-            otherParticipant: { name: 'Task Owner' }
-          })}
+          onPress={async () => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    const res = await axios.get(`http://192.168.10.15:5000/api/chat/task/${item._id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const chat = res.data;
+    if (!chat || !chat._id) {
+      Alert.alert('Chat not found for this task.');
+      return;
+    }
+
+    navigation.navigate('ChatScreen', {
+      chatId: chat._id,
+      taskId: item._id,
+      taskTitle: item.title,
+      otherParticipant: { name: 'Task Owner' }, // Update this dynamically if possible
+    });
+  } catch (err) {
+    console.error('Error fetching chat:', err.message);
+    Alert.alert('Error', 'Could not fetch chat for this task.');
+  }
+}}
         >
           <Text style={styles.acceptText}>💬 Chat</Text>
         </TouchableOpacity>
