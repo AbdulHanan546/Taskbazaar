@@ -5,8 +5,10 @@ const messageSchema = new mongoose.Schema({
   content: { type: String, required: true },
   messageType: { type: String, enum: ['text', 'image'], default: 'text' },
   timestamp: { type: Date, default: Date.now },
-  read: { type: Boolean, default: false }
+  read: { type: Boolean, default: false },
+  clientId: { type: String } // 👈 ADD THIS
 });
+
 
 const chatSchema = new mongoose.Schema({
   taskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', required: true },

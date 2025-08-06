@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
   // Handle sending messages
   socket.on('send-message', async (data) => {
     try {
-      const { taskId, content, messageType = 'text' } = data;
+      const { taskId, content, messageType = 'text',clientId } = data;
       
       // Find or create chat for this task
       let chat = await Chat.findOne({ taskId });
@@ -91,11 +91,13 @@ io.on('connection', (socket) => {
 
       // Add message to chat
       const message = {
-        sender: socket.userId,
-        content,
-        messageType,
-        timestamp: new Date()
-      };
+  sender: socket.userId,
+  content,
+  messageType,
+  timestamp: new Date(),
+  clientId  // 👈 ADD THIS
+};
+
 
       chat.messages.push(message);
       chat.lastMessage = new Date();

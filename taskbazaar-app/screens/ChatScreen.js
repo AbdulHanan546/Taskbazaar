@@ -57,11 +57,20 @@ export default function ChatScreen() {
       });
 
       socketInstance.on('new-message', (data) => {
-        if (data.taskId === taskId) {
-          setMessages(prev => [...prev, data.message]);
-          scrollToBottom();
-        }
-      });
+  if (data.taskId === taskId) {
+    setMessages(prev => {
+      // Avoid duplicate if clientId already exists
+      if (data.message.clientId && prev.some(m => m.clientId === data.message.clientId)) {
+        return prev.map(m => 
+          m.clientId === data.message.clientId ? data.message : m // replace with server message
+        );
+      }
+      return [...prev, data.message];
+    });
+    scrollToBottom();
+  }
+});
+
 
       socketInstance.on('user-typing', (data) => {
         if (data.taskId === taskId && data.userId !== currentUser?._id) {
@@ -128,21 +137,37 @@ export default function ChatScreen() {
   };
 
   const sendMessage = () => {
-    if (!newMessage.trim() || !socket) return;
+  if (!newMessage.trim() || !socket || !currentUser) return;
 
-    const messageData = {
-      taskId,
-      content: newMessage.trim(),
-      messageType: 'text'
-    };
-
-    socket.emit('send-message', messageData);
-    setNewMessage('');
-    
-    // Stop typing indicator
-    socket.emit('typing-stop', taskId);
-    setIsTyping(false);
+  const messageData = {
+    taskId,
+    content: newMessage.trim(),
+    messageType: 'text',
   };
+
+  const clientId = `client-${Date.now()}`;
+
+const optimisticMessage = {
+  _id: clientId,
+  clientId,
+  sender: currentUser._id,
+  content: newMessage.trim(),
+  timestamp: new Date().toISOString(),
+  read: false,
+};
+
+setMessages(prev => [...prev, optimisticMessage]);
+scrollToBottom();
+
+socket.emit('send-message', { ...messageData, clientId });
+
+  setNewMessage('');
+
+  // Stop typing indicator
+  socket.emit('typing-stop', taskId);
+  setIsTyping(false);
+};
+
 
   const handleTyping = (text) => {
     setNewMessage(text);
@@ -178,7 +203,9 @@ export default function ChatScreen() {
   };
 
   const renderMessage = ({ item }) => {
-    const isOwnMessage = item.sender?.toString() === currentUser?._id?.toString();
+  const senderId = typeof item.sender === 'object' ? item.sender._id : item.sender;
+const isOwnMessage = senderId === currentUser?._id;
+
     
     return (
       <View style={[
