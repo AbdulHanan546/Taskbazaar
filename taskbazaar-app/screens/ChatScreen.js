@@ -64,7 +64,7 @@ export default function ChatScreen() {
       });
 
       socketInstance.on('user-typing', (data) => {
-        if (data.taskId === taskId && data.userId !== currentUser?.id) {
+        if (data.taskId === taskId && data.userId !== currentUser?._id) {
           setTypingUsers(prev => [...prev.filter(id => id !== data.userId), data.userId]);
         }
       });
@@ -80,7 +80,7 @@ export default function ChatScreen() {
           // Update message read status
           setMessages(prev => prev.map(msg => ({
             ...msg,
-            read: msg.sender === currentUser?.id ? true : msg.read
+            read: msg.sender === currentUser?._id ? true : msg.read
           })));
         }
       });
@@ -178,7 +178,7 @@ export default function ChatScreen() {
   };
 
   const renderMessage = ({ item }) => {
-    const isOwnMessage = item.sender === currentUser?.id;
+    const isOwnMessage = item.sender?.toString() === currentUser?._id?.toString();
     
     return (
       <View style={[

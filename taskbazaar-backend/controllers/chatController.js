@@ -15,7 +15,12 @@ exports.getOrCreateChat = async (req, res) => {
     }
 
     // Check if user is task owner or assigned provider
-    if (task.user.toString() !== userId && task.provider?.toString() !== userId) {
+    // ALLOW: If user is task owner, or assigned provider, or (provider and task is open)
+    const isTaskOwner = task.user.toString() === userId;
+    const isAssignedProvider = task.provider?.toString() === userId;
+    const isProvider = req.user.role === 'provider';
+    const isTaskOpen = task.status === 'open';
+    if (!isTaskOwner && !isAssignedProvider && !(isProvider && isTaskOpen)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -23,17 +28,25 @@ exports.getOrCreateChat = async (req, res) => {
     let chat = await Chat.findOne({ taskId }).populate('participants', 'name');
     
     if (!chat) {
+      // For open tasks, allow chat between task owner and any provider
       const participants = [task.user];
-      if (task.provider) {
+      if (isProvider) {
+        participants.push(userId);
+      } else if (task.provider) {
         participants.push(task.provider);
       }
-
       chat = await Chat.create({
         taskId,
         participants
       });
-      
       chat = await Chat.findById(chat._id).populate('participants', 'name');
+    } else {
+      // If provider is not in participants, add them (for open tasks)
+      if (isProvider && isTaskOpen && !chat.participants.some(p => p._id.toString() === userId)) {
+        chat.participants.push(userId);
+        await chat.save();
+        chat = await Chat.findById(chat._id).populate('participants', 'name');
+      }
     }
 
     res.json(chat);
