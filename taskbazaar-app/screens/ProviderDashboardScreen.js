@@ -6,10 +6,9 @@ import axios from 'axios';
 import MapView, { Marker } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import { useNavigation } from '@react-navigation/native';
 import { Image } from 'react-native';
 
-export default function ProviderDashboardScreen() {
+export default function ProviderDashboardScreen({ navigation }) {
   const [location, setLocation] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +38,6 @@ const logout = async (navigation) => {
     console.log('Logout error:', err);
   }
 };
-  const navigation = useNavigation();
 
   const handleAcceptTask = async (taskId, taskTitle) => {
     try {
@@ -381,7 +379,24 @@ const renderAssignedTask = ({ item }) => (
       />
     </View>
   )}
-
+        <View style={{
+          justifyContent:'center', alignItems: 'center', marginTop: 20, marginBottom: 20
+        }}>
+          <TouchableOpacity 
+style={{
+  backgroundColor: '#3b82f6',
+  padding: 10,
+  width: '50%',
+  borderRadius: 18,
+}}
+onPress={() => navigation.navigate('CompanyRegister')}>
+  <Text style={{
+    color: '#fff',
+    textAlign: 'center',}}>
+    Register as a company
+  </Text>
+</TouchableOpacity>
+        </View>
   <View style={styles.buttonRow}>
     <TouchableOpacity onPress={() => navigation.navigate('ChatList')} style={styles.chatBtn}>
       <Text style={styles.chatBtnText}>💬 Messages</Text>

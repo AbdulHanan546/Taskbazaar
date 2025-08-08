@@ -27,6 +27,7 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/tasks', require('./routes/taskRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
+app.use('/api/company', require('./routes/companyRoutes'));
 app.use('/uploads', express.static('uploads')); // expose uploads directory
 
 // Socket.io authentication middleware

@@ -8,13 +8,15 @@ import ProviderRegisterScreen from '../screens/ProviderRegisterScreen';
 import ProviderDashboardScreen from '../screens/ProviderDashboardScreen';
 import ChatListScreen from '../screens/ChatListScreen';
 import ChatScreen from '../screens/ChatScreen';
-
+import CompanyRegisterScreen from '../screens/CompanyRegisterScreen';
+import CompanyDashboardScreen from '../screens/CompanyDashboardScreen';
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Home">
+
         <Stack.Screen name="Home" component={LandingScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
@@ -23,6 +25,8 @@ export default function AppNavigator() {
         <Stack.Screen name="ProviderDashboard" component={ProviderDashboardScreen} />
         <Stack.Screen name="ChatList" component={ChatListScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ChatScreen" component={ChatScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="CompanyRegister" component={CompanyRegisterScreen} />
+        <Stack.Screen name="CompanyDashboard" component={CompanyDashboardScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
