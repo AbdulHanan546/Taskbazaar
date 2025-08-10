@@ -19,11 +19,13 @@ export default function LoginScreen({ navigation }) {
     await AsyncStorage.setItem('token', token);
     await AsyncStorage.setItem('user', JSON.stringify(user)); // Store role
 
-    if (user.role === 'provider') {
-      navigation.replace('ProviderDashboard'); // ✅ Go to Provider Dashboard
-    } else {
-      navigation.replace('Dashboard'); // Or your normal user dashboard
-    }
+   if (user.role === 'provider') {
+  navigation.replace('ProviderDashboard');
+} else if (user.role === 'provider_employee') {
+  navigation.replace('EmployeeDashboard'); // NEW
+} else {
+  navigation.replace('Dashboard');
+}
   } catch (err) {
     console.error(err);
     Alert.alert('Login Failed', err.response?.data?.message || 'Please try again');

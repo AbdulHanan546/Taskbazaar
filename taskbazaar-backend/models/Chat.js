@@ -6,7 +6,7 @@ const messageSchema = new mongoose.Schema({
   messageType: { type: String, enum: ['text', 'image'], default: 'text' },
   timestamp: { type: Date, default: Date.now },
   read: { type: Boolean, default: false },
-  clientId: { type: String } // 👈 ADD THIS
+  clientId: { type: String } 
 });
 
 

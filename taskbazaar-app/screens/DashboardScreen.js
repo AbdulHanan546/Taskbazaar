@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, Button, Alert, StyleSheet, FlatList, ScrollView, Dimensions,TouchableOpacity
+  View, Text, TextInput, Button, Alert, StyleSheet, FlatList, ScrollView, Dimensions,Modal,TouchableOpacity
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,7 +10,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 const { width, height } = Dimensions.get('window');
-
+import OSMMap from './OSMMap';
 export default function DashboardScreen() {
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
@@ -21,6 +21,10 @@ export default function DashboardScreen() {
   const [images, setImages] = useState([]);
   const mapRef = useRef(null);
   const [budget, setBudget] = useState('');
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+const [currentTaskId, setCurrentTaskId] = useState(null);
+const [rating, setRating] = useState(0);
+
 
   const navigation = useNavigation();
 
@@ -140,37 +144,52 @@ formData.append('budget', budget);
   }
 };
 
-  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await axios.put(
+      await axios.put(
         `http://192.168.10.15:5000/api/tasks/${taskId}/status`,
         { status: newStatus },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (response.data.emailSent) {
-        Alert.alert(
-          'Status Updated!',
-          `Task status updated to ${newStatus}. Email notification sent.`,
-          [{ text: 'OK', onPress: () => fetchTasks() }]
-        );
+      if (newStatus === 'completed') {
+        setCurrentTaskId(taskId);
+        setRating(0);
+        setRatingModalVisible(true); // Open rating modal
       } else {
-        Alert.alert(
-          'Status Updated!',
-          `Task status updated to ${newStatus}.`,
-          [{ text: 'OK', onPress: () => fetchTasks() }]
-        );
+        fetchTasks();
       }
+
+      Alert.alert('Status Updated!', `Task status updated to ${newStatus}.`);
     } catch (error) {
       console.error('Error updating task status:', error);
       Alert.alert('Error', error.response?.data?.error || 'Failed to update task status');
     }
   };
+
+  const submitRating = async () => {
+    if (rating < 1 || rating > 5) {
+      Alert.alert('Invalid', 'Please select a rating between 1 and 5.');
+      return;
+    }
+    try {
+      const token = await AsyncStorage.getItem('token');
+      await axios.put(
+        `http://192.168.10.15:5000/api/tasks/${currentTaskId}/rating`,
+        { rating },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      Alert.alert('Thank you!', 'Your rating has been submitted.');
+      setRatingModalVisible(false);
+      fetchTasks();
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to submit rating.');
+    }
+  };
+
+
 
 
   const renderTask = ({ item }) => (
@@ -193,6 +212,14 @@ formData.append('budget', budget);
       <Text style={styles.taskLocation}>
         📍 {item.location?.coordinates?.join(', ')}
       </Text>
+      {item.provider && item.provider.avgRating !== null && (
+  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+    <Text style={{ fontSize: 16, fontWeight: '600', marginRight: 4 }}>
+      ⭐ {item.provider.avgRating.toFixed(1)}
+    </Text>
+    <Text style={{ color: 'gray' }}>by {item.provider.name}</Text>
+  </View>
+)}
       {item.images?.map((img, idx) => (
         <Image
           key={idx}
@@ -204,7 +231,10 @@ formData.append('budget', budget);
       
       {/* Task Status Management Buttons */}
       {item.status === 'assigned' && (
+        
         <View style={styles.actionButtons}>
+          
+
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
             onPress={() => handleUpdateTaskStatus(item._id, 'completed')}
@@ -227,7 +257,7 @@ formData.append('budget', budget);
     onPress={async () => {
       try {
         const token = await AsyncStorage.getItem('token');
-        const res = await axios.get(`http://192.168.10.15:5000/api/chat/by-task/${item._id}`, {
+        const res = await axios.get(`http://192.168.10.15:5000/api/chat/task/${item._id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -281,31 +311,20 @@ formData.append('budget', budget);
 />
 
       <Text style={styles.sectionTitle}>📍 Select Location</Text>
-      {mapRegion && (
-        <View style={styles.mapContainer}>
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            initialRegion={mapRegion}
-            onRegionChangeComplete={(region) => {
-              setLocation({
-                latitude: region.latitude,
-                longitude: region.longitude,
-              });
-            }}
-          />
-          {/* Center pointer */}
-          <View style={styles.mapPin} pointerEvents="none">
-            <Text style={{ fontSize: 28 }}>📍</Text>
-          </View>
-        </View>
-      )}
-
       {location && (
-        <Text style={{ color: 'gray', marginTop: 5 }}>
-          Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-        </Text>
-      )}
+  <View style={styles.mapContainer}>
+    <OSMMap location={location} setLocation={setLocation} />
+  </View>
+)}
+
+{location && (
+  <Text style={{ color: 'gray', marginTop: 5 }}>
+    Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+  </Text>
+)}
+
+
+      
 
       <Button title="Pick Image" onPress={pickImage} />
       <View style={{ flexDirection: 'row', marginTop: 10 }}>
@@ -327,6 +346,24 @@ formData.append('budget', budget);
         renderItem={renderTask}
         scrollEnabled={false}
       />
+            {/* Rating Modal */}
+      <Modal visible={ratingModalVisible} transparent animationType="slide">
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 8, width: 300 }}>
+            <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 10 }}>Rate your provider</Text>
+            <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity key={star} onPress={() => setRating(star)}>
+                  <Text style={{ fontSize: 28, color: star <= rating ? 'gold' : 'gray' }}>★</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Button title="Submit Rating" onPress={submitRating} />
+            <Button title="Cancel" color="red" onPress={() => setRatingModalVisible(false)} />
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.buttonRow}>
         <TouchableOpacity onPress={() => navigation.navigate('ChatList')} style={styles.chatBtn}>
           <Text style={styles.chatBtnText}>💬 Messages</Text>

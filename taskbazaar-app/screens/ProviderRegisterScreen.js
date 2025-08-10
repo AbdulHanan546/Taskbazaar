@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Button, Alert, ScrollView, ActivityIndicator
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
 import axios from 'axios';
+import OSMMap from './OSMMap'; // Adjust path if needed
 
 export default function ProviderRegisterScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -12,6 +13,9 @@ export default function ProviderRegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [services, setServices] = useState('');
   const [location, setLocation] = useState(null);
+  const [phone, setPhone] = useState('');
+  const [cnic, setCnic] = useState('');
+
   const [loadingLocation, setLoadingLocation] = useState(true);
 
   useEffect(() => {
@@ -47,10 +51,12 @@ export default function ProviderRegisterScreen({ navigation }) {
     }
 
     try {
-      const res = await axios.post('http://192.168.10.15:5000/api/auth/register', {
+      await axios.post('http://192.168.10.15:5000/api/auth/register', {
         name,
         email,
         password,
+        phone,
+        cnic,
         role: 'provider',
         services: services.split(',').map(service => service.trim()),
         location: {
@@ -94,6 +100,19 @@ export default function ProviderRegisterScreen({ navigation }) {
         style={styles.input}
       />
       <TextInput
+        placeholder="Phone Number"
+        keyboardType="phone-pad"
+        value={phone}
+        onChangeText={setPhone}
+        style={styles.input}
+      />
+      <TextInput
+        placeholder="CNIC (e.g. 12345-1234567-1)"
+        value={cnic}
+        onChangeText={setCnic}
+        style={styles.input}
+      />
+      <TextInput
         placeholder="Password"
         secureTextEntry
         value={password}
@@ -110,22 +129,11 @@ export default function ProviderRegisterScreen({ navigation }) {
       <Text style={styles.label}>Drag the pin to your service location:</Text>
 
       {location && (
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            ...location,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          onPress={(e) => setLocation(e.nativeEvent.coordinate)}
-        >
-          <Marker
-            draggable
-            coordinate={location}
-            onDragEnd={(e) => setLocation(e.nativeEvent.coordinate)}
-          />
-        </MapView>
-      )}
+  <View style={{ height: 250, marginBottom: 20 }}>
+    <OSMMap location={location} setLocation={setLocation} />
+  </View>
+)}
+
 
       <Button title="Register as Provider" onPress={handleRegister} />
     </ScrollView>

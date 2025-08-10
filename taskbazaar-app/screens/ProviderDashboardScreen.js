@@ -7,6 +7,7 @@ import MapView, { Marker } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Image } from 'react-native';
+import OSMMap from './OSMMap'; 
 
 export default function ProviderDashboardScreen({ navigation }) {
   const [location, setLocation] = useState(null);
@@ -181,15 +182,17 @@ const renderAssignedTask = ({ item }) => (
 
     {item.images?.map((img, idx) => (
       <Image
-        key={idx}
-        source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
-        style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
-        resizeMode="cover"
-      />
+  key={idx}
+  source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
+  style={{ width: '100%', aspectRatio: 16/9, marginTop: 10, borderRadius: 6 }}
+  resizeMode="contain"
+/>
+
     ))}
 
     {/* Action buttons */}
-    {item.status === 'assigned' && (
+    {['assigned', 'in-progress'].includes(item.status) && (
+
       <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' }}>
         <TouchableOpacity
           style={[styles.statusButton, { backgroundColor: '#059669', marginRight: 10 }]}
@@ -210,7 +213,7 @@ const renderAssignedTask = ({ item }) => (
           onPress={async () => {
                 try {
                   const token = await AsyncStorage.getItem('token');
-                  const res = await axios.get(`http://192.168.10.15:5000/api/chat/by-task/${item._id}`, {
+                  const res = await axios.get(`http://192.168.10.15:5000/api/chat/task/${item._id}`, {
                     headers: { Authorization: `Bearer ${token}` },
                   });
           
@@ -330,27 +333,10 @@ const renderAssignedTask = ({ item }) => (
     <View style={styles.container}>
   <Text style={styles.header}>Nearby Tasks</Text>
 
-  <MapView
-    style={styles.map}
-    initialRegion={{
-      ...location,
-      latitudeDelta: 0.03,
-      longitudeDelta: 0.03,
-    }}
-  >
-    <Marker coordinate={location} pinColor="blue" />
-    {tasks.map((task) => (
-      <Marker
-        key={task._id}
-        coordinate={{
-          latitude: task.location.coordinates[1],
-          longitude: task.location.coordinates[0],
-        }}
-        title={task.title}
-        description={task.description}
-      />
-    ))}
-  </MapView>
+<View style={{ height: 300 }}>
+  <OSMMap location={location} setLocation={setLocation} tasks={tasks} />
+</View>
+
 
   <FlatList
     data={tasks}
@@ -389,11 +375,11 @@ style={{
   width: '50%',
   borderRadius: 18,
 }}
-onPress={() => navigation.navigate('CompanyRegister')}>
+onPress={() => navigation.navigate('CompanyDashboard')}>
   <Text style={{
     color: '#fff',
     textAlign: 'center',}}>
-    Register as a company
+    View Company dashboard
   </Text>
 </TouchableOpacity>
         </View>

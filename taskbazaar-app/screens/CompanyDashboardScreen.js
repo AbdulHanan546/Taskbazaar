@@ -10,38 +10,108 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect } from 'react';
 const CompanyDashboardScreen = () => {
   const [employees, setEmployees] = useState([]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [profession, setProfession] = useState('');
+  const [cnic, setCnic] = useState('');
+const [password, setPassword] = useState('');
+const [providerId, setProviderId] = useState('');
 
-  const addEmployee = () => {
-    if (!name.trim() || !email.trim() || !profession.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
+
+
+useEffect(() => {
+  const loadProviderId = async () => {
+    const storedUser = await AsyncStorage.getItem('user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setProviderId(parsedUser._id); // assuming backend returns _id for the provider
     }
+  };
+  loadProviderId();
+}, []);
+useEffect(() => {
+  const fetchAssignedEmployees = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
+      const res = await axios.get(
+        "http://192.168.10.15:5000/api/tasks/assigned",
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      const tasks = res.data || [];
+
+      // Extract assigned employees from tasks
+      const uniqueEmployees = {};
+      tasks.forEach(task => {
+        if (task.assignedEmployee) {
+          uniqueEmployees[task.assignedEmployee._id] = {
+            id: task.assignedEmployee._id,
+            name: task.assignedEmployee.name,
+            email: task.assignedEmployee.email,
+            status: task.status
+          };
+        }
+      });
+
+      setEmployees(Object.values(uniqueEmployees));
+    } catch (err) {
+      console.error("Fetch Error:", err.response?.data || err.message);
     }
+  };
 
-    const newEmployee = {
-      id: Date.now().toString(),
-      name: name.trim(),
-      email: email.trim(),
-      profession: profession.trim(),
-      status: 'free',
-    };
+  fetchAssignedEmployees();
+}, []);
 
-    setEmployees([...employees, newEmployee]);
+
+
+
+  const addEmployee = async () => {
+  if (!name.trim() || !email.trim() || !profession.trim() || !cnic.trim() || !password.trim()) {
+    Alert.alert('Error', 'Please fill in all fields');
+    return;
+  }
+
+  try {
+    const res = await axios.post('http://192.168.10.15:5000/api/auth/register', {
+      name,
+      email,
+      password,
+      cnic,
+      services: [profession],  // matches backend "services" array
+      role: 'provider_employee', // must match backend schema
+      providerId: providerId    // must match backend field name
+    });
+
+    setEmployees([...employees, {
+      id: res.data._id,
+      name,
+      email,
+      profession,
+      status: 'free'
+    }]);
+
     setName('');
     setEmail('');
     setProfession('');
-  };
+    setCnic('');
+    setPassword('');
+  } catch (err) {
+      console.log("Add Employee Error:", err); // <-- full error object
+  console.log("Error Response:", err.response?.data); // backend response if any
+  console.log("Error Message:", err.message); // network or other error
+    Alert.alert('Error', err.response?.data?.error || 'Could not add employee');
+  }
+};
+
+
 
   const removeEmployee = (id) => {
     setEmployees(employees.filter(emp => emp.id !== id));
@@ -110,6 +180,20 @@ const CompanyDashboardScreen = () => {
               value={profession}
               onChangeText={setProfession}
             />
+            <TextInput
+  style={styles.input}
+  placeholder="CNIC"
+  value={cnic}
+  onChangeText={setCnic}
+/>
+<TextInput
+  style={styles.input}
+  placeholder="Password"
+  secureTextEntry
+  value={password}
+  onChangeText={setPassword}
+/>
+
             <TouchableOpacity
               style={styles.addButton}
               onPress={addEmployee}
@@ -137,11 +221,32 @@ const CompanyDashboardScreen = () => {
                       <Text style={styles.employeeEmail}>{employee.email}</Text>
                       <Text style={styles.employeeProfession}>{employee.profession}</Text>
                       <View style={styles.statusRow}>
-                        <View style={[styles.statusDot, { backgroundColor: employee.status === 'free' ? '#22c55e' : '#f59e42' }]} />
-                        <Text style={[styles.statusText, { color: employee.status === 'free' ? '#16a34a' : '#ea580c' }]}>
-                          {employee.status === 'free' ? 'Available' : 'At Work'}
-                        </Text>
-                      </View>
+  <View
+    style={[
+      styles.statusDot,
+      { backgroundColor: employee.status === "free" ? "#22c55e" : "#f59e42" }
+    ]}
+  />
+  <Text
+    style={[
+      styles.statusText,
+      { color: employee.status === "free" ? "#16a34a" : "#ea580c" }
+    ]}
+  >
+    {employee.status === "free" ? "Available" : "At Work"}
+  </Text>
+</View>
+
+{employee.tasks?.length > 0 && (
+  <View style={{ marginTop: 6 }}>
+    {employee.tasks.map(task => (
+      <Text key={task._id} style={{ fontSize: 12, color: "#374151" }}>
+        • {task.title}
+      </Text>
+    ))}
+  </View>
+)}
+
                     </View>
                     <View style={styles.actionRow}>
                       <TouchableOpacity

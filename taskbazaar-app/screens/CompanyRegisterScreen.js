@@ -99,7 +99,7 @@ const CompanyRegisterScreen = ({ navigation }) => {
         operatingHours: formData.operatingHours,
       };
 
-      const response = await fetch('http://localhost:5000/api/company/register', {
+      const response = await fetch('http://192.168.10.15:5000/api/company/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -14,8 +14,11 @@ const taskSchema = new mongoose.Schema({
     required: true
   }
 },
+rating: { type: Number, min: 1, max: 5, default: null },
+
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   provider: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  assignedEmployee: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { type: String, enum: ['open', 'assigned', 'completed','cancelled'], default: 'open' },
     budget: Number,
   images: [String], // <-- Add this line

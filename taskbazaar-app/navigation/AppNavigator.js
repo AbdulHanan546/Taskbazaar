@@ -10,6 +10,7 @@ import ChatListScreen from '../screens/ChatListScreen';
 import ChatScreen from '../screens/ChatScreen';
 import CompanyRegisterScreen from '../screens/CompanyRegisterScreen';
 import CompanyDashboardScreen from '../screens/CompanyDashboardScreen';
+import EmployeeDashboardScreen from '../screens/EmployeeDashboardScreen';
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
@@ -27,6 +28,7 @@ export default function AppNavigator() {
         <Stack.Screen name="ChatScreen" component={ChatScreen} options={{ headerShown: false }} />
         <Stack.Screen name="CompanyRegister" component={CompanyRegisterScreen} />
         <Stack.Screen name="CompanyDashboard" component={CompanyDashboardScreen} />
+        <Stack.Screen name="EmployeeDashboard" component={EmployeeDashboardScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
