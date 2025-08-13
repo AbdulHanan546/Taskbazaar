@@ -1,5 +1,6 @@
 const express = require('express');
 const dotenv = require('dotenv');
+dotenv.config();
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -8,7 +9,9 @@ const connectDB = require('./config/db');
 const Chat = require('./models/Chat');
 const User = require('./models/User');
 const Task = require('./models/Task')
-dotenv.config();
+const bodyParser = require('body-parser');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
@@ -16,6 +19,35 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"]
   }
+});
+app.post('/api/webhooks/stripe', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.log('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  const paymentIntent = event.data.object;
+
+  try {
+    if (event.type === 'payment_intent.succeeded') {
+      const taskId = paymentIntent.metadata.taskId;
+      await Task.findByIdAndUpdate(taskId, { paymentStatus: 'completed' });
+    }
+
+    if (event.type === 'payment_intent.payment_failed') {
+      const taskId = paymentIntent.metadata.taskId;
+      await Task.findByIdAndUpdate(taskId, { paymentStatus: 'failed' });
+    }
+  } catch (err) {
+    console.error('Failed to update task payment status:', err.message);
+  }
+
+  res.json({ received: true });
 });
 
 connectDB();

@@ -157,28 +157,46 @@ export default function DashboardScreen() {
   };
 
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      await axios.put(
+  try {
+    const token = await AsyncStorage.getItem('token');
+    let res;
+
+    if (newStatus === 'completed') {
+      // Call backend completeTask endpoint
+      res = await axios.put(
+        `${API_BASE_URL}/api/tasks/${taskId}/complete`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } else {
+      // Call regular updateTaskStatus endpoint for other status changes
+      res = await axios.put(
         `${API_BASE_URL}/api/tasks/${taskId}/status`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      if (newStatus === 'completed') {
-        setCurrentTaskId(taskId);
-        setRating(0);
-        setRatingModalVisible(true);
-      } else {
-        fetchTasks();
-      }
-
-      Alert.alert('Status Updated!', `Task status updated to ${newStatus}.`);
-    } catch (error) {
-      console.error('Error updating task status:', error);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to update task status');
     }
-  };
+
+    const updatedTask = res.data.task;
+
+    if (newStatus === 'completed') {
+      if (updatedTask.userCompleted && updatedTask.providerCompleted) {
+        Alert.alert('Task Completed', 'Payment has been initiated.');
+      } else {
+        Alert.alert('Status Updated', 'Marked as completed. Waiting for other party.');
+      }
+    } else {
+      Alert.alert('Status Updated', `Task status changed to ${newStatus}`);
+    }
+
+    fetchTasks(); // refresh tasks list
+  } catch (error) {
+    console.error('Error updating task status:', error);
+    Alert.alert('Error', error.response?.data?.error || 'Failed to update task status');
+  }
+};
+
+
 
   const submitRating = async () => {
     if (rating < 1 || rating > 5) {
@@ -202,108 +220,113 @@ export default function DashboardScreen() {
   };
 
   const renderTask = ({ item }) => (
-    <View style={styles.taskCard}>
-      <View style={styles.taskHeader}>
-        <Text style={styles.taskTitle}>{item.title}</Text>
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor:
-                item.status === 'open'
-                  ? '#10B981'
-                  : item.status === 'assigned'
-                  ? '#3B82F6'
-                  : item.status === 'completed'
-                  ? '#059669'
-                  : '#EF4444',
-            },
-          ]}
-        >
-          <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
-        </View>
+  <View style={styles.taskCard}>
+    <View style={styles.taskHeader}>
+      <Text style={styles.taskTitle}>{item.title}</Text>
+      <View
+        style={[
+          styles.statusBadge,
+          {
+            backgroundColor:
+              item.status === 'open'
+                ? '#10B981'
+                : item.status === 'assigned'
+                ? '#3B82F6'
+                : item.status === 'completed'
+                ? '#059669'
+                : '#EF4444',
+          },
+        ]}
+      >
+        <Text style={styles.statusText}>
+          {item.status === 'completed' ? 'COMPLETED' :
+           item.userCompleted || item.providerCompleted ? 'PENDING COMPLETION' :
+           item.status.toUpperCase()}
+        </Text>
       </View>
-
-      <Text style={styles.taskDesc}>{item.description}</Text>
-
-      <Text style={styles.taskBudget}>
-        Budget: <Text style={{ fontWeight: '700' }}>PKR {item.budget}</Text>
-      </Text>
-
-      <Text style={styles.taskLocation}>
-        📍 {item.location?.address || item.location?.coordinates?.join(', ') || 'Unknown'}
-      </Text>
-
-      {item?.provider && item.provider.avgRating !== null && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', marginRight: 4 }}>
-            ⭐ {Number(item.provider.avgRating).toFixed(1)}
-          </Text>
-          <Text style={{ color: 'gray' }}>by {item.provider.name}</Text>
-        </View>
-      )}
-
-      {/* Task images */}
-      {Array.isArray(item.images) &&
-        item.images.map((img, idx) => (
-          <Image
-            key={idx}
-            source={{ uri: `${API_BASE_URL}/uploads/${img}` }}
-            style={styles.taskImage}
-            resizeMode="cover"
-          />
-        ))}
-
-      {/* Task Status Management Buttons */}
-      {item.status === 'assigned' && (
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
-            onPress={() => handleUpdateTaskStatus(item._id, 'completed')}
-          >
-            <Text style={styles.actionBtnText}>Mark Completed</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#EF4444' }]}
-            onPress={() => handleUpdateTaskStatus(item._id, 'cancelled')}
-          >
-            <Text style={styles.actionBtnText}>Cancel Task</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Chat Button for assigned tasks */}
-      {item.status === 'assigned' && (
-        <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: '#3B82F6', marginTop: 10 }]}
-          onPress={async () => {
-            try {
-              const token = await AsyncStorage.getItem('token');
-              const res = await axios.get(`${API_BASE_URL}/api/chat/task/${item._id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              const chat = res.data;
-              if (!chat || !chat._id) {
-                Alert.alert('Chat not found for this task.');
-                return;
-              }
-              navigation.navigate('ChatScreen', {
-                chatId: chat._id,
-                taskId: item._id,
-                taskTitle: item.title,
-                otherParticipant: { name: 'Provider' },
-              });
-            } catch (err) {
-              console.error('Error fetching chat:', err.message);
-              Alert.alert('Error', 'Could not fetch chat for this task.');
-            }
-          }}
-        >
-          <Text style={styles.actionBtnText}>💬 Chat with Provider</Text>
-        </TouchableOpacity>
-      )}
     </View>
-  );
+
+    <Text style={styles.taskDesc}>{item.description}</Text>
+
+    <Text style={styles.taskBudget}>
+      Budget: <Text style={{ fontWeight: '700' }}>PKR {item.budget}</Text>
+    </Text>
+
+    <Text style={styles.taskLocation}>
+      📍 {item.location?.address || item.location?.coordinates?.join(', ') || 'Unknown'}
+    </Text>
+
+    {item?.provider && item.provider.avgRating !== null && (
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', marginRight: 4 }}>
+          ⭐ {Number(item.provider.avgRating).toFixed(1)}
+        </Text>
+        <Text style={{ color: 'gray' }}>by {item.provider.name}</Text>
+      </View>
+    )}
+
+    {/* Task images */}
+    {Array.isArray(item.images) &&
+      item.images.map((img, idx) => (
+        <Image
+          key={idx}
+          source={{ uri: `${API_BASE_URL}/uploads/${img}` }}
+          style={styles.taskImage}
+          resizeMode="cover"
+        />
+      ))}
+
+    {/* Task Status Management Buttons */}
+    {item.status === 'assigned' && !item.userCompleted && (
+      <View style={styles.actionButtons}>
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
+          onPress={() => handleUpdateTaskStatus(item._id,'completed')}
+        >
+          <Text style={styles.actionBtnText}>Mark Completed</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: '#EF4444' }]}
+          onPress={() => handleUpdateTaskStatus(item._id, 'cancelled')}
+        >
+          <Text style={styles.actionBtnText}>Cancel Task</Text>
+        </TouchableOpacity>
+      </View>
+    )}
+
+    {/* Chat Button for assigned tasks */}
+    {item.status === 'assigned' && (
+      <TouchableOpacity
+        style={[styles.actionBtn, { backgroundColor: '#3B82F6', marginTop: 10 }]}
+        onPress={async () => {
+          try {
+            const token = await AsyncStorage.getItem('token');
+            const res = await axios.get(`${API_BASE_URL}/api/chat/task/${item._id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const chat = res.data;
+            if (!chat || !chat._id) {
+              Alert.alert('Chat not found for this task.');
+              return;
+            }
+            navigation.navigate('ChatScreen', {
+              chatId: chat._id,
+              taskId: item._id,
+              taskTitle: item.title,
+              otherParticipant: { name: 'Provider' },
+            });
+          } catch (err) {
+            console.error('Error fetching chat:', err.message);
+            Alert.alert('Error', 'Could not fetch chat for this task.');
+          }
+        }}
+      >
+        <Text style={styles.actionBtnText}>💬 Chat with Provider</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
 
   return (
     <View style={styles.screen}>

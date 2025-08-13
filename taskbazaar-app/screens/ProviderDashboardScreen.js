@@ -146,42 +146,80 @@ const logout = async (navigation) => {
 const updateTaskStatus = async (taskId, newStatus) => {
   try {
     const token = await AsyncStorage.getItem('token');
-    const res = await axios.put(
-      `${API_BASE_URL}/api/tasks/${taskId}/status`,
-      { status: newStatus },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    let res;
 
-    Alert.alert('Success', `Task marked as ${newStatus}`);
+    if (newStatus === 'completed') {
+      res = await axios.put(
+        `${API_BASE_URL}/api/tasks/${taskId}/complete`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const updatedTask = res.data.task;
+
+      if (updatedTask.userCompleted && updatedTask.providerCompleted) {
+        if (updatedTask.paymentStatus === 'completed') {
+          Alert.alert('Task Completed', 'Payment completed successfully.');
+        } else if (updatedTask.paymentStatus === 'initiated') {
+          Alert.alert('Task Completed', 'Payment initiated. Waiting for confirmation.');
+        } else if (updatedTask.paymentStatus === 'failed') {
+          Alert.alert('Task Completed', 'Payment failed. Please retry.');
+        } else {
+          Alert.alert('Status Updated', 'Marked as completed. Waiting for other party.');
+        }
+      } else {
+        Alert.alert('Status Updated', 'Marked as completed. Waiting for other party.');
+      }
+
+    } else {
+      res = await axios.put(
+        `${API_BASE_URL}/api/tasks/${taskId}/status`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      Alert.alert('Success', `Task marked as ${newStatus}`);
+    }
+
     fetchAssignedTasks(); // refresh assigned list
   } catch (error) {
     console.error('Status update failed:', error);
     Alert.alert('Error', error.response?.data?.error || 'Failed to update task status');
   }
 };
+
+const getTaskDisplayStatus = (task) => {
+  if (task.status === 'cancelled') return 'cancelled';
+  if (task.status === 'completed') return 'completed';
+  if (task.userCompleted) return 'waiting-for-other';
+  return task.status; // assigned / in-progress
+};
+
+
 const renderAssignedTask = ({ item }) => (
   <View style={styles.taskCard}>
     <View style={styles.taskHeader}>
       <Text style={styles.taskTitle}>{item.title}</Text>
-      <View style={[
-        styles.statusBadge,
-        {
-          backgroundColor:
-            item.status === 'assigned' ? '#3B82F6'
-            : item.status === 'completed' ? '#059669'
-            : item.status === 'cancelled' ? '#EF4444'
-            : '#10B981'
-        }
-      ]}>
-        <Text style={styles.statusText}>{item.status?.toUpperCase()}</Text>
-      </View>
+     <View style={[
+  styles.statusBadge,
+  {
+    backgroundColor:
+      item.paymentStatus === 'completed' ? '#059669' :
+      item.paymentStatus === 'failed' ? '#EF4444' :
+      item.status === 'assigned' ? '#3B82F6' :
+      item.status === 'completed' ? '#10B981' :
+      '#F59E0B'
+  }
+]}>
+  <Text style={styles.statusText}>
+    {item.paymentStatus === 'completed' ? 'PAYMENT COMPLETED' :
+     item.paymentStatus === 'failed' ? 'PAYMENT FAILED' :
+     item.status?.toUpperCase()}
+  </Text>
+</View>
+
+
     </View>
 
-    {/* Optional: Show who is assigned */}
     {item.assignedEmployeeName && (
       <Text style={{ fontStyle: 'italic', color: '#555' }}>
         Assigned to: {item.assignedEmployeeName}
@@ -200,7 +238,7 @@ const renderAssignedTask = ({ item }) => (
 
     {item.images?.map((img, index) => (
       <Image
-        key={`${item._id}-img-${index}`} // stable key for images
+        key={`${item._id}-img-${index}`}
         source={{ uri: `${API_BASE_URL}/uploads/${img}` }}
         style={{ width: '100%', aspectRatio: 16 / 9, marginTop: 10, borderRadius: 6 }}
         resizeMode="contain"
@@ -211,7 +249,7 @@ const renderAssignedTask = ({ item }) => (
       <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' }}>
         <TouchableOpacity
           style={[styles.statusButton, { backgroundColor: '#059669', marginRight: 10 }]}
-          onPress={() => updateTaskStatus(item._id, 'completed')}
+          onPress={() => updateTaskStatus(item._id, 'completed')} // calls completeTask now
         >
           <Text style={styles.statusButtonText}>Mark Completed</Text>
         </TouchableOpacity>
@@ -256,6 +294,7 @@ const renderAssignedTask = ({ item }) => (
     )}
   </View>
 );
+
 
 
   const renderTask = ({ item }) => (

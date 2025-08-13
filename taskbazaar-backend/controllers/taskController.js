@@ -85,7 +85,10 @@ exports.getUserTasks = async (req, res) => {
   try {
     const tasks = await Task.find({ 
         user: req.user.id,
-        status: { $nin: ["completed", "cancelled"] }
+        $or: [
+          { status: { $nin: ["cancelled"] } }, // all non-cancelled tasks
+          { providerCompleted: true }          // include tasks completed by provider
+        ]
       })
       .sort({ createdAt: -1 })
       .populate('provider', 'name email');
@@ -118,11 +121,9 @@ exports.getUserTasks = async (req, res) => {
       let address = task.location?.address || null;
       if (!address && task.location?.coordinates?.length === 2) {
         try {
-          // FIX: Correct lat/lon order
           const lat = task.location.coordinates[1];
           const lon = task.location.coordinates[0];
           address = await coordsToAddress(lon, lat);
-          console.log(address)
 
           // Save for future requests
           task.location.address = address;
@@ -138,7 +139,11 @@ exports.getUserTasks = async (req, res) => {
         location: {
           ...task.location.toObject?.() ?? task.location,
           address
-        }
+        },
+        // New fields for frontend
+        userCompleted: task.userCompleted ?? false,
+        providerCompleted: task.providerCompleted ?? false,
+        paymentStatus: task.paymentStatus ?? 'pending'
       };
     }));
 
@@ -147,6 +152,7 @@ exports.getUserTasks = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 
 
@@ -306,6 +312,91 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
+const stripe = require('../stripe');
+
+
+exports.completeTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const userId = req.user.id;
+
+    const task = await Task.findById(taskId).populate('user provider');
+
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    // Only task poster or provider can mark complete
+    if (![task.user._id.toString(), task.provider._id.toString()].includes(userId)) {
+      return res.status(403).json({ error: 'Not authorized to complete this task' });
+    }
+
+    // Update completion flags
+    if (userId === task.user._id.toString()) task.userCompleted = true;
+    if (userId === task.provider._id.toString()) task.providerCompleted = true;
+
+    await task.save();
+
+    // If both completed, trigger Stripe payment
+    if (task.userCompleted && task.providerCompleted && task.paymentStatus !== 'initiated') {
+  const amount = task.budget * 100; // cents
+  const commission = Math.round(amount * 0.10);
+
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: amount,
+    currency: 'usd',
+    payment_method_types: ['card'],
+    metadata: { taskId: task._id.toString(), commission },
+  });
+
+  task.stripePaymentIntentId = paymentIntent.id;
+  task.paymentStatus = 'initiated';
+  await task.save();
+
+  return res.json({ task, message: 'Both marked completed. Payment initiated (test mode).' });
+}
+
+
+    res.json({ task, message: 'Marked as completed. Waiting for other party.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+exports.handleStripeWebhook = async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.rawBody, req.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      const paymentIntent = event.data.object;
+      const task = await Task.findById(paymentIntent.metadata.taskId);
+      if (task) {
+        task.paymentStatus = 'paid';
+        await task.save();
+      }
+      break;
+    case 'payment_intent.payment_failed':
+      const failedIntent = event.data.object;
+      const failedTask = await Task.findById(failedIntent.metadata.taskId);
+      if (failedTask) {
+        failedTask.paymentStatus = 'failed';
+        await failedTask.save();
+      }
+      break;
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  res.json({ received: true });
+};
+
 // Accept task (for providers)
 exports.acceptTask = async (req, res) => {
   try {
@@ -415,6 +506,17 @@ exports.getAssignedTasks = async (req, res) => {
       .populate("assignedEmployee", "name email profession")
       .populate("provider", "name email");
 
+    // ✅ Get tasks marked as completed by the task poster (userCompleted)
+    const userCompletedTasks = await Task.find({
+      $or: [
+        { provider: providerId },
+        { assignedEmployee: { $in: employees.map(e => e._id) } }
+      ],
+      userCompleted: true
+    })
+      .populate("assignedEmployee", "name email profession")
+      .populate("provider", "name email");
+
     // ✅ Format employees with work status
     const employeesWithStatus = employees.map(emp => {
       const hasActiveTask = activeTasks.some(
@@ -429,10 +531,11 @@ exports.getAssignedTasks = async (req, res) => {
       };
     });
 
-    // ✅ Send both datasets so frontend can choose
+    // ✅ Send datasets: active tasks + userCompleted tasks
     res.json({
       employees: employeesWithStatus,
-      tasks: activeTasks
+      tasks: activeTasks,
+      userCompletedTasks  // added this
     });
 
   } catch (err) {
@@ -440,6 +543,7 @@ exports.getAssignedTasks = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 
 

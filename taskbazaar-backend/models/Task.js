@@ -25,6 +25,10 @@ const taskSchema = new mongoose.Schema({
   status: { type: String, enum: ['open', 'assigned', 'completed', 'cancelled'], default: 'open' },
   budget: Number,
   images: [String],
+    userCompleted: { type: Boolean, default: false },
+  providerCompleted: { type: Boolean, default: false },
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
+  stripePaymentIntentId: { type: String, default: null }, // store stripe intent
 }, { timestamps: true });
 
 taskSchema.index({ location: '2dsphere' });
