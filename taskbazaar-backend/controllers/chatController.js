@@ -59,14 +59,20 @@ exports.getOrCreateChat = async (req, res) => {
 // Get user's chat list
 exports.getUserChats = async (req, res) => {
   try {
-    const userId = req.user.id;
-    
+    let participantIds = [req.user.id];
+
+    if (req.user.role === 'provider') {
+      const employees = await User.find({ providerId: req.user.id }).select('_id');
+      const employeeIds = employees.map(e => e._id.toString());
+      participantIds = participantIds.concat(employeeIds);
+    }
+
     const chats = await Chat.find({
-      participants: userId
+      participants: { $in: participantIds }
     })
-    .populate('taskId', 'title status')
-    .populate('participants', 'name')
-    .sort({ lastMessage: -1 });
+      .populate('taskId', 'title status')
+      .populate('participants', 'name')
+      .sort({ lastMessage: -1 });
 
     res.json(chats);
   } catch (err) {
@@ -74,6 +80,7 @@ exports.getUserChats = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // Get chat messages
 const mongoose = require('mongoose');

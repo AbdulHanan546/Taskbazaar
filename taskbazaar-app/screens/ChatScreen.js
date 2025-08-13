@@ -7,7 +7,7 @@ import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useNavigation, useRoute } from '@react-navigation/native';
-
+import { API_BASE_URL } from '../config';
 export default function ChatScreen() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -22,7 +22,6 @@ export default function ChatScreen() {
   const { chatId, taskId, taskTitle, otherParticipant } = route.params;
   const flatListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-
   useEffect(() => {
     initializeChat();
     console.log('Route Params:', route.params);
@@ -47,7 +46,7 @@ export default function ChatScreen() {
       }
 
       // Initialize Socket.io connection
-      const socketInstance = io('http://192.168.10.15:5000', {
+      const socketInstance = io(`${API_BASE_URL}`, {
         auth: { token }
       });
 
@@ -114,7 +113,7 @@ export default function ChatScreen() {
     try {
       const token = await AsyncStorage.getItem('token');
       const response = await axios.get(
-        `http://192.168.10.15:5000/api/chat/${chatId}/messages`,
+        `${API_BASE_URL}/api/chat/${chatId}/messages`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setMessages(response.data);
@@ -127,7 +126,7 @@ export default function ChatScreen() {
     try {
       const token = await AsyncStorage.getItem('token');
       await axios.put(
-        `http://192.168.10.15:5000/api/chat/${chatId}/read`,
+        `${API_BASE_URL}/api/chat/${chatId}/read`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );

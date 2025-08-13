@@ -1,10 +1,40 @@
 const Task = require('../models/Task');
 const User = require('../models/User');
+const Chat = require('../models/Chat'); // import chat model
 const { 
   sendTaskAssignedNotification, 
   sendTaskCompletedNotification, 
   sendTaskCancelledNotification 
 } = require('../services/emailService');
+const axios = require("axios");
+
+async function coordsToAddress(lon, lat) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=14&addressdetails=1&accept-language=en`;
+    const res = await axios.get(url, { headers: { "User-Agent": "TaskBazaar/1.0" } });
+
+    const addr = res.data.address || {};
+
+    // Possible sources for the first part (town/neighbourhood)
+    const townName = addr.suburb || addr.neighbourhood || addr.town || addr.village || null;
+
+    // Possible sources for the tehsil (city_district, county, or municipality)
+    const tehsilName = addr.city_district || addr.county || null;
+
+    if (townName && tehsilName) return `${townName}, ${tehsilName}`;
+    if (townName) return townName;
+    if (tehsilName) return tehsilName;
+
+    return "Unknown location";
+  } catch (err) {
+    console.error("Reverse geocoding failed:", err.message);
+    return "Unknown location";
+  }
+}
+
+
+
+
 exports.createTask = async (req, res) => {
   const imagePaths = req.files ? req.files.map(file => file.filename) : [];
   let parsedLocation;
@@ -49,19 +79,21 @@ exports.getTasks = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
 exports.getUserTasks = async (req, res) => {
   try {
-    // Fetch tasks with populated provider info
-    const tasks = await Task.find({ user: req.user.id })
+    const tasks = await Task.find({ 
+        user: req.user.id,
+        status: { $nin: ["completed", "cancelled"] }
+      })
       .sort({ createdAt: -1 })
       .populate('provider', 'name email');
 
-    // Get all provider IDs from these tasks
     const providerIds = tasks
       .map(task => task.provider?._id)
       .filter(Boolean);
 
-    // Aggregate avg rating per provider across all tasks
     const ratingsAgg = await Task.aggregate([
       { $match: { provider: { $in: providerIds }, rating: { $ne: null } } },
       {
@@ -72,31 +104,54 @@ exports.getUserTasks = async (req, res) => {
       }
     ]);
 
-    // Map providerId to avgRating
     const avgRatingsMap = {};
     ratingsAgg.forEach(r => {
       avgRatingsMap[r._id.toString()] = r.avgRating;
     });
 
-    // Attach avgRating to each task's provider
-    const tasksWithAvgRating = tasks.map(task => {
+    const tasksWithExtras = await Promise.all(tasks.map(async task => {
       const provider = task.provider ? task.provider.toObject() : null;
       if (provider) {
         provider.avgRating = avgRatingsMap[provider._id.toString()] ?? null;
       }
+
+      let address = task.location?.address || null;
+      if (!address && task.location?.coordinates?.length === 2) {
+        try {
+          // FIX: Correct lat/lon order
+          const lat = task.location.coordinates[1];
+          const lon = task.location.coordinates[0];
+          address = await coordsToAddress(lon, lat);
+          console.log(address)
+
+          // Save for future requests
+          task.location.address = address;
+          await task.save();
+        } catch (err) {
+          console.error("Address lookup failed:", err.message);
+        }
+      }
+
       return {
         ...task.toObject(),
-        provider
+        provider,
+        location: {
+          ...task.location.toObject?.() ?? task.location,
+          address
+        }
       };
-    });
+    }));
 
-    res.json(tasksWithAvgRating);
+    res.json(tasksWithExtras);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
 
+
+
+const sleep = ms => new Promise(res => setTimeout(res, ms));
 
 exports.getNearbyTasks = async (req, res) => {
   try {
@@ -109,7 +164,6 @@ exports.getNearbyTasks = async (req, res) => {
     let location = user.location;
     let services = user.services || [];
 
-    // If employee, inherit provider location & services
     if (user.role === 'provider_employee' && user.providerId) {
       const provider = await User.findById(user.providerId);
       if (provider) {
@@ -118,7 +172,7 @@ exports.getNearbyTasks = async (req, res) => {
       }
     }
 
-    if (!location || !location.coordinates || location.coordinates.length !== 2) {
+    if (!location?.coordinates || location.coordinates.length !== 2) {
       return res.status(400).json({ error: 'Provider location is missing or invalid' });
     }
 
@@ -145,12 +199,41 @@ exports.getNearbyTasks = async (req, res) => {
       ...(services.length > 0 && { $or: serviceRegex })
     });
 
-    res.json(tasks);
+    const tasksWithAddresses = await Promise.all(tasks.map(async (task, i) => {
+      let address = task.location?.address || null;
+
+      if (!address && task.location?.coordinates?.length === 2) {
+        try {
+          // Slow down to avoid 429 errors
+          await sleep(300); 
+          address = await coordsToAddress(
+            task.location.coordinates[0],
+            task.location.coordinates[1]
+          );
+          task.location.address = address;
+          await task.save();
+        } catch (err) {
+          console.error(`Geocoding failed for task ${task._id}:`, err.message);
+        }
+      }
+
+      return {
+        ...task.toObject(),
+        location: {
+          ...task.location,
+          address
+        }
+      };
+    }));
+
+    res.json(tasksWithAddresses);
   } catch (err) {
     console.error('Nearby Task Fetch Error:', err);
     res.status(500).json({ error: err.message });
   }
 };
+
+
 
 
 // Update task status and send email notification
@@ -245,6 +328,26 @@ exports.acceptTask = async (req, res) => {
     task.assignedEmployee = user._id;
     await task.save();
 
+    let chat = await Chat.findOne({ taskId: task._id });
+if (!chat) {
+  chat = new Chat({
+    taskId: task._id,
+    participants: [task.user._id, providerId] // provider always included
+  });
+}
+
+// If employee is different from provider, add them too
+if (user.role === 'provider_employee' && !chat.participants.includes(user._id)) {
+  chat.participants.push(user._id);
+}
+
+// Ensure provider is in participants
+if (!chat.participants.includes(providerId)) {
+  chat.participants.push(providerId);
+}
+
+await chat.save();
+
     // Send email notification to the task owner
     let emailSent = false;
     try {
@@ -292,17 +395,52 @@ exports.rateTask = async (req, res) => {
 
 exports.getAssignedTasks = async (req, res) => {
   try {
-    const tasks = await Task.find({
-      provider: req.user.id,
-      status: { $in: ['assigned', 'completed'] }
-    })
-    .populate('assignedEmployee', 'name email') // shows who accepted the task
-    .populate('user', 'name email') // shows who created the task
-    .sort({ createdAt: -1 });
+    const providerId = req.user.id;
 
-    res.json(tasks);
+    // ✅ Get employees under this provider
+    let employees = [];
+    if (req.user.role === "provider") {
+      employees = await User.find({ providerId })
+        .select("_id name email profession");
+    }
+
+    // ✅ Get active assigned tasks for provider or their employees
+    const activeTasks = await Task.find({
+      $or: [
+        { provider: providerId },
+        { assignedEmployee: { $in: employees.map(e => e._id) } }
+      ],
+      status: { $in: ["assigned"] }
+    })
+      .populate("assignedEmployee", "name email profession")
+      .populate("provider", "name email");
+
+    // ✅ Format employees with work status
+    const employeesWithStatus = employees.map(emp => {
+      const hasActiveTask = activeTasks.some(
+        t => t.assignedEmployee && t.assignedEmployee._id.toString() === emp._id.toString()
+      );
+      return {
+        id: emp._id,
+        name: emp.name,
+        email: emp.email,
+        profession: emp.profession || '',
+        status: hasActiveTask ? "at-work" : "free"
+      };
+    });
+
+    // ✅ Send both datasets so frontend can choose
+    res.json({
+      employees: employeesWithStatus,
+      tasks: activeTasks
+    });
+
   } catch (err) {
+    console.error("Get assigned tasks error:", err);
     res.status(500).json({ error: err.message });
   }
 };
+
+
+
 

@@ -5,7 +5,7 @@ import {
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-
+import { API_BASE_URL } from '../config';
 export default function ChatListScreen() {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +31,7 @@ useEffect(() => {
   const fetchChats = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await axios.get('http://192.168.10.15:5000/api/chat/user-chats', {
+      const response = await axios.get(`${API_BASE_URL}/api/chat/user-chats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setChats(response.data);

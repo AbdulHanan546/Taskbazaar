@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, Button, Alert, StyleSheet, FlatList, ScrollView, Dimensions,Modal,TouchableOpacity
+  View, Text, TextInput, Button, Alert, StyleSheet, FlatList,
+  ScrollView, Dimensions, Modal, TouchableOpacity, RefreshControl
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import MapView, { Marker } from 'react-native-maps';
 import { Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-const { width, height } = Dimensions.get('window');
 import OSMMap from './OSMMap';
+import { API_BASE_URL } from '../config';
+
+const { width, height } = Dimensions.get('window');
+
 export default function DashboardScreen() {
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
@@ -19,25 +22,27 @@ export default function DashboardScreen() {
   const [mapRegion, setMapRegion] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [images, setImages] = useState([]);
-  const mapRef = useRef(null);
   const [budget, setBudget] = useState('');
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
-const [currentTaskId, setCurrentTaskId] = useState(null);
-const [rating, setRating] = useState(0);
-
+  const [currentTaskId, setCurrentTaskId] = useState(null);
+  const [rating, setRating] = useState(0);
+ const [activeTab, setActiveTab] = useState('create');
+  const [refreshing, setRefreshing] = useState(false);
 
   const navigation = useNavigation();
+  const mapRef = useRef(null);
 
-const logout = async (navigation) => {
-  try {
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('user');
-    navigation.replace('Login'); // or navigate, depending on your navigation setup
-  } catch (err) {
-    console.log('Logout error:', err);
-  }
-};
+  const logout = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('user');
+      navigation.replace('Login');
+    } catch (err) {
+      console.log('Logout error:', err);
+    }
+  };
 
+  // Initial permissions + user
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -45,7 +50,6 @@ const logout = async (navigation) => {
         Alert.alert('Permission Denied', 'Location permission is required.');
         return;
       }
-
       const loc = await Location.getCurrentPositionAsync({});
       const coords = {
         latitude: loc.coords.latitude,
@@ -53,7 +57,6 @@ const logout = async (navigation) => {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
-
       setLocation({ latitude: coords.latitude, longitude: coords.longitude });
       setMapRegion(coords);
     })();
@@ -63,23 +66,34 @@ const logout = async (navigation) => {
       if (storedUser) {
         const user = JSON.parse(storedUser);
         setName(user.name);
-        fetchTasks();
       }
     };
-
     fetchUserInfo();
   }, []);
 
   const fetchTasks = async () => {
     const token = await AsyncStorage.getItem('token');
     try {
-      const res = await axios.get('http://192.168.10.15:5000/api/tasks/my', {
+      const res = await axios.get(`${API_BASE_URL}/api/tasks/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setTasks(res.data);
+      setTasks(res.data || []);
     } catch (err) {
       console.log('Error fetching tasks:', err.message);
     }
+  };
+
+  // Re-fetch whenever the Posts tab becomes active
+  useEffect(() => {
+    if (activeTab === 'posts') {
+      fetchTasks();
+    }
+  }, [activeTab]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchTasks();
+    setRefreshing(false);
   };
 
   const pickImage = async () => {
@@ -88,67 +102,65 @@ const logout = async (navigation) => {
       allowsMultipleSelection: true,
       quality: 1,
     });
-
     if (!result.canceled) {
-      setImages([...images, result.assets[0]]);
+      setImages((prev) => [...prev, result.assets[0]]);
     }
   };
 
   const handlePostTask = async () => {
-  const token = await AsyncStorage.getItem('token');
+    const token = await AsyncStorage.getItem('token');
 
-  if (!location || !location.latitude || !location.longitude) {
-    Alert.alert('Error', 'Please select a location on the map.');
-    return;
-  }
-console.log('Sending location:', location);
+    if (!location || !location.latitude || !location.longitude) {
+      Alert.alert('Error', 'Please select a location on the map.');
+      return;
+    }
 
-  const formData = new FormData();
-  formData.append('title', title);
-  formData.append('description', desc);
- formData.append(
-  'location',
-  JSON.stringify({
-    latitude: location.latitude,
-    longitude: location.longitude,
-  })
-);
-formData.append('budget', budget);
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('description', desc);
+    formData.append(
+      'location',
+      JSON.stringify({
+        latitude: location.latitude,
+        longitude: location.longitude,
+      })
+    );
+    formData.append('budget', budget);
 
-
-  images.forEach((img, index) => {
-    formData.append('images', {
-      uri: img.uri,
-      name: `image_${index}.jpg`,
-      type: 'image/jpeg',
-    });
-  });
-
-  try {
-    await axios.post('http://192.168.10.15:5000/api/tasks', formData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
-      },
+    images.forEach((img, index) => {
+      formData.append('images', {
+        uri: img.uri,
+        name: `image_${index}.jpg`,
+        type: 'image/jpeg',
+      });
     });
 
-    Alert.alert('Success', 'Task posted successfully!');
-    setTitle('');
-    setDesc('');
-    setLocation(null);
-    setImages([]);
-    fetchTasks();
-    setBudget(''); // ✅ reset after post
-  } catch (err) {
-    Alert.alert('Error', err.response?.data?.error || 'Failed to post task');
-  }
-};
+    try {
+      await axios.post(`${API_BASE_URL}/api/tasks`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
-    const handleUpdateTaskStatus = async (taskId, newStatus) => {
+      Alert.alert('Success', 'Task posted successfully!');
+      setTitle('');
+      setDesc('');
+      setLocation(location); // keep last selected location
+      setImages([]);
+      setBudget('');
+      setActiveTab('posts'); // switch to posts
+      fetchTasks(); // refresh immediately
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to post task');
+    }
+  };
+
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
       const token = await AsyncStorage.getItem('token');
       await axios.put(
-        `http://192.168.10.15:5000/api/tasks/${taskId}/status`,
+        `${API_BASE_URL}/api/tasks/${taskId}/status`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -156,7 +168,7 @@ formData.append('budget', budget);
       if (newStatus === 'completed') {
         setCurrentTaskId(taskId);
         setRating(0);
-        setRatingModalVisible(true); // Open rating modal
+        setRatingModalVisible(true);
       } else {
         fetchTasks();
       }
@@ -176,7 +188,7 @@ formData.append('budget', budget);
     try {
       const token = await AsyncStorage.getItem('token');
       await axios.put(
-        `http://192.168.10.15:5000/api/tasks/${currentTaskId}/rating`,
+        `${API_BASE_URL}/api/tasks/${currentTaskId}/rating`,
         { rating },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -189,52 +201,62 @@ formData.append('budget', budget);
     }
   };
 
-
-
-
   const renderTask = ({ item }) => (
     <View style={styles.taskCard}>
       <View style={styles.taskHeader}>
         <Text style={styles.taskTitle}>{item.title}</Text>
-        <View style={[
-          styles.statusBadge, 
-          { backgroundColor: item.status === 'open' ? '#10B981' : 
-                          item.status === 'assigned' ? '#3B82F6' : 
-                          item.status === 'completed' ? '#059669' : '#EF4444' }
-        ]}>
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor:
+                item.status === 'open'
+                  ? '#10B981'
+                  : item.status === 'assigned'
+                  ? '#3B82F6'
+                  : item.status === 'completed'
+                  ? '#059669'
+                  : '#EF4444',
+            },
+          ]}
+        >
           <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
         </View>
       </View>
-      <Text>{item.description}</Text>
-      <Text style={{ fontWeight: '600', marginTop: 6 }}>
-        Budget: PKR{item.budget}
+
+      <Text style={styles.taskDesc}>{item.description}</Text>
+
+      <Text style={styles.taskBudget}>
+        Budget: <Text style={{ fontWeight: '700' }}>PKR {item.budget}</Text>
       </Text>
+
       <Text style={styles.taskLocation}>
-        📍 {item.location?.coordinates?.join(', ')}
+        📍 {item.location?.address || item.location?.coordinates?.join(', ') || 'Unknown'}
       </Text>
-      {item.provider && item.provider.avgRating !== null && (
-  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-    <Text style={{ fontSize: 16, fontWeight: '600', marginRight: 4 }}>
-      ⭐ {item.provider.avgRating.toFixed(1)}
-    </Text>
-    <Text style={{ color: 'gray' }}>by {item.provider.name}</Text>
-  </View>
-)}
-      {item.images?.map((img, idx) => (
-        <Image
-          key={idx}
-          source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
-          style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
-          resizeMode="cover"
-        />
-      ))}
-      
+
+      {item?.provider && item.provider.avgRating !== null && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', marginRight: 4 }}>
+            ⭐ {Number(item.provider.avgRating).toFixed(1)}
+          </Text>
+          <Text style={{ color: 'gray' }}>by {item.provider.name}</Text>
+        </View>
+      )}
+
+      {/* Task images */}
+      {Array.isArray(item.images) &&
+        item.images.map((img, idx) => (
+          <Image
+            key={idx}
+            source={{ uri: `${API_BASE_URL}/uploads/${img}` }}
+            style={styles.taskImage}
+            resizeMode="cover"
+          />
+        ))}
+
       {/* Task Status Management Buttons */}
       {item.status === 'assigned' && (
-        
         <View style={styles.actionButtons}>
-          
-
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
             onPress={() => handleUpdateTaskStatus(item._id, 'completed')}
@@ -249,243 +271,274 @@ formData.append('budget', budget);
           </TouchableOpacity>
         </View>
       )}
-      
+
       {/* Chat Button for assigned tasks */}
       {item.status === 'assigned' && (
-  <TouchableOpacity
-    style={[styles.actionBtn, { backgroundColor: '#3B82F6', marginTop: 10 }]}
-    onPress={async () => {
-      try {
-        const token = await AsyncStorage.getItem('token');
-        const res = await axios.get(`http://192.168.10.15:5000/api/chat/task/${item._id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const chat = res.data;
-        if (!chat || !chat._id) {
-          Alert.alert('Chat not found for this task.');
-          return;
-        }
-
-        navigation.navigate('ChatScreen', {
-          chatId: chat._id,
-          taskId: item._id,
-          taskTitle: item.title,
-          otherParticipant: { name: 'Provider' }, // Update this with actual participant if needed
-        });
-      } catch (err) {
-        console.error('Error fetching chat:', err.message);
-        Alert.alert('Error', 'Could not fetch chat for this task.');
-      }
-    }}
-  >
-    <Text style={styles.actionBtnText}>💬 Chat with Provider</Text>
-  </TouchableOpacity>
-)}
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: '#3B82F6', marginTop: 10 }]}
+          onPress={async () => {
+            try {
+              const token = await AsyncStorage.getItem('token');
+              const res = await axios.get(`${API_BASE_URL}/api/chat/task/${item._id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const chat = res.data;
+              if (!chat || !chat._id) {
+                Alert.alert('Chat not found for this task.');
+                return;
+              }
+              navigation.navigate('ChatScreen', {
+                chatId: chat._id,
+                taskId: item._id,
+                taskTitle: item.title,
+                otherParticipant: { name: 'Provider' },
+              });
+            } catch (err) {
+              console.error('Error fetching chat:', err.message);
+              Alert.alert('Error', 'Could not fetch chat for this task.');
+            }
+          }}
+        >
+          <Text style={styles.actionBtnText}>💬 Chat with Provider</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.screen}>
       <Text style={styles.greeting}>Hello, {name}</Text>
 
-      <Text style={styles.sectionTitle}>Create New Task</Text>
-      <TextInput
-        style={styles.input}
-        value={title}
-        onChangeText={setTitle}
-        placeholder="Enter task title"
-      />
-      <TextInput
-        style={styles.input}
-        value={desc}
-        onChangeText={setDesc}
-        placeholder="Enter task description"
-      />
-       <TextInput
-  style={styles.input}
-  value={budget}
-  onChangeText={setBudget}
-  keyboardType="numeric"
-  placeholder="Enter budget (PKR)"
-/>
-
-      <Text style={styles.sectionTitle}>📍 Select Location</Text>
-      {location && (
-  <View style={styles.mapContainer}>
-    <OSMMap location={location} setLocation={setLocation} />
-  </View>
-)}
-
-{location && (
-  <Text style={{ color: 'gray', marginTop: 5 }}>
-    Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-  </Text>
-)}
-
-
-      
-
-      <Button title="Pick Image" onPress={pickImage} />
-      <View style={{ flexDirection: 'row', marginTop: 10 }}>
-        {images.map((img, i) => (
-          <Image
-            key={i}
-            source={{ uri: img.uri }}
-            style={{ width: 60, height: 60, marginRight: 10 }}
-          />
-        ))}
+      {/* Tabs */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'create' && styles.tabActive]}
+          onPress={() => setActiveTab('create')}
+        >
+          <Text style={activeTab === 'create' ? styles.tabTextActive : styles.tabText}>Create Task</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'posts' && styles.tabActive]}
+          onPress={() => setActiveTab('posts')}
+        >
+          <Text style={activeTab === 'posts' ? styles.tabTextActive : styles.tabText}>My Posts</Text>
+        </TouchableOpacity>
       </View>
 
-      <Button title="Post Task" onPress={handlePostTask} />
+      {/* Content */}
+      {activeTab === 'create' ? (
+        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+          <Text style={styles.sectionTitle}>Task Details</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Enter task title"
+          />
+          <TextInput
+            style={[styles.input, { minHeight: 90 }]}
+            value={desc}
+            onChangeText={setDesc}
+            placeholder="Enter task description"
+            multiline
+          />
+          <TextInput
+            style={styles.input}
+            value={budget}
+            onChangeText={setBudget}
+            keyboardType="numeric"
+            placeholder="Enter budget (PKR)"
+          />
 
-      <Text style={styles.sectionTitle}>Your Posts</Text>
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item._id}
-        renderItem={renderTask}
-        scrollEnabled={false}
-      />
-            {/* Rating Modal */}
+          <Text style={styles.sectionTitle}>📍 Select Location</Text>
+          {location && (
+            <View style={styles.mapContainer}>
+              <OSMMap location={location} setLocation={setLocation} />
+            </View>
+          )}
+
+          {location && (
+            <Text style={{ color: 'gray', marginTop: 6, marginBottom: 8 }}>
+              Location: {location.latitude?.toFixed(4)}, {location.longitude?.toFixed(4)}
+            </Text>
+          )}
+
+          <View style={{ marginTop: 8 }}>
+            <Button title="Pick Image" onPress={pickImage} />
+            <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' }}>
+              {images.map((img, i) => (
+                <Image
+                  key={i}
+                  source={{ uri: img.uri }}
+                  style={{ width: 70, height: 70, marginRight: 10, marginBottom: 10, borderRadius: 8 }}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={{ marginTop: 12 }}>
+            <Button title="Post Task" onPress={handlePostTask} />
+          </View>
+        </ScrollView>
+      ) : (
+        <View style={{ flex: 1 }}>
+          <FlatList
+            data={tasks}
+            keyExtractor={(item) => item._id}
+            renderItem={renderTask}
+            contentContainerStyle={{ paddingBottom: 110 }} // space for floating bar
+            ListEmptyComponent={
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: '#6b7280' }}>No posts yet.</Text>
+              </View>
+            }
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          />
+
+          {/* Floating bottom action bar (not too bottom) */}
+          <View style={styles.floatingBar}>
+            <TouchableOpacity onPress={() => navigation.navigate('ChatList')} style={styles.chatBtn}>
+              <Text style={styles.chatBtnText}>💬 Messages</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Rating Modal */}
       <Modal visible={ratingModalVisible} transparent animationType="slide">
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 8, width: 300 }}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
             <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 10 }}>Rate your provider</Text>
             <View style={{ flexDirection: 'row', marginBottom: 20 }}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <TouchableOpacity key={star} onPress={() => setRating(star)}>
-                  <Text style={{ fontSize: 28, color: star <= rating ? 'gold' : 'gray' }}>★</Text>
+                  <Text style={{ fontSize: 32, marginRight: 6, color: star <= rating ? 'gold' : 'gray' }}>
+                    ★
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
             <Button title="Submit Rating" onPress={submitRating} />
+            <View style={{ height: 10 }} />
             <Button title="Cancel" color="red" onPress={() => setRatingModalVisible(false)} />
           </View>
         </View>
       </Modal>
-
-      <View style={styles.buttonRow}>
-        <TouchableOpacity onPress={() => navigation.navigate('ChatList')} style={styles.chatBtn}>
-          <Text style={styles.chatBtnText}>💬 Messages</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-
-    </ScrollView>
-    
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    backgroundColor: '#f9fafb',
+  screen: {
     flex: 1,
+    backgroundColor: '#f9fafb',
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   greeting: {
     fontSize: 22,
     fontWeight: '600',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginVertical: 15,
+    marginTop: 10,
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 6,
-    padding: 10,
+    borderRadius: 10,
+    padding: 12,
     backgroundColor: '#fff',
     marginBottom: 10,
   },
+  mapContainer: {
+    height: 300,
+    marginVertical: 10,
+    width: '100%',
+    alignSelf: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+
+  /* Tabs */
+  tabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 10,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  tabActive: {
+    backgroundColor: '#ffffff',
+  },
+  tabText: {
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+
+  /* Task cards */
   taskCard: {
     backgroundColor: '#fff',
-    padding: 15,
-    marginBottom: 10,
-    borderRadius: 8,
+    padding: 14,
+    marginHorizontal: 2,
+    marginVertical: 6,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
+  taskHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   taskTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    flexShrink: 1,
+    paddingRight: 8,
+  },
+  taskDesc: {
+    color: '#374151',
+    marginTop: 2,
+  },
+  taskBudget: {
+    marginTop: 8,
+    color: '#111827',
   },
   taskLocation: {
     color: '#6b7280',
     marginTop: 4,
     fontStyle: 'italic',
   },
-  mapContainer: {
-  height: 300,
-  marginVertical: 10,
-  width: '95%',             // reduce width
-  alignSelf: 'center',      // center the map
-  borderRadius: 12,
-  overflow: 'hidden',       // clip map corners
-},
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  mapPin: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -14,
-    marginTop: -34,
-    zIndex: 10,
-  },
-  logoutBtn: {
-  backgroundColor: '#ef4444',
-  padding: 10,
-  borderRadius: 6,
-  alignItems: 'center',
-  marginVertical: 10,
-},
-  logoutText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 10,
-  },
-  chatBtn: {
-    backgroundColor: '#10B981',
-    padding: 10,
-    borderRadius: 6,
-    flex: 1,
-    marginRight: 5,
-    alignItems: 'center',
-  },
-  chatBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  logoutBtn: {
-    backgroundColor: '#ef4444',
-    padding: 10,
-    borderRadius: 6,
-    flex: 1,
-    marginLeft: 5,
-    alignItems: 'center',
-  },
-  taskHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  taskImage: {
+    width: '100%',
+    height: 200,
+    marginTop: 10,
+    borderRadius: 10,
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 999,
   },
   statusText: {
     color: '#fff',
@@ -495,19 +548,72 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: 12,
   },
   actionBtn: {
     flex: 1,
-    padding: 8,
-    borderRadius: 6,
+    padding: 10,
+    borderRadius: 8,
     marginHorizontal: 5,
     alignItems: 'center',
   },
   actionBtnText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 12,
-  }
+    fontSize: 13,
+  },
 
+  /* Floating bottom bar */
+  floatingBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+    gap: 10,
+  },
+  chatBtn: {
+    flex: 1,
+    backgroundColor: '#10B981',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  chatBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  logoutBtn: {
+    flex: 1,
+    backgroundColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  logoutText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+
+  /* Modal */
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    width: 320,
+  },
 });

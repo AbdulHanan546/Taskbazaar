@@ -3,34 +3,65 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import axios from 'axios';
-
+import { API_BASE_URL } from '../config';
 export default function RegisterScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user'); // You can also add picker if needed
+const validateEmailFormat = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
 
-  const handleRegister = async () => {
-    if (!name || !email || !password || !role) {
-      Alert.alert('Error', 'Please fill in all fields.');
-      return;
-    }
+  const verifyEmailExists = async (email) => {
+  try {
+    // Example using Abstract API (replace with your API key)
+    const apiKey = '250789ef0cc44263bd5d520c91774016';
+    const response = await axios.get(`https://emailvalidation.abstractapi.com/v1/?api_key=${apiKey}&email=${email}`);
+    
+    // You can check response.data.is_valid_format.value, is_smtp_valid.value, etc.
+    return response.data.is_smtp_valid.value;  // true if email exists
+  } catch (error) {
+    console.log('Email verification API error:', error.message);
+    // Optional: allow registration if API fails or block it
+    return false;
+  }
+};
 
-    try {
-      const res = await axios.post('http://192.168.10.15:5000/api/auth/register', {
-        name,
-        email,
-        password,
-        role
-      });
+const handleRegister = async () => {
+  if (!name || !email || !password || !role) {
+    Alert.alert('Error', 'Please fill in all fields.');
+    return;
+  }
 
-      Alert.alert('Success', 'Registered successfully! Please login.');
-      navigation.navigate('Login');
-    } catch (err) {
-      console.log(err.response?.data || err.message);
-      Alert.alert('Registration Failed', err.response?.data?.message || 'Server error');
-    }
-  };
+  if (!validateEmailFormat(email)) {
+    Alert.alert('Invalid Email', 'Please enter a valid email address.');
+    return;
+  }
+
+  const emailExists = await verifyEmailExists(email);
+  if (!emailExists) {
+    Alert.alert('Invalid Email', 'Email does not exist or is not reachable.');
+    return;
+  }
+
+  try {
+    const res = await axios.post(`${API_BASE_URL}/api/auth/register`, {
+      name,
+      email,
+      password,
+      role
+    });
+
+    Alert.alert('Success', 'Registered successfully! Please login.');
+    navigation.navigate('Login');
+  } catch (err) {
+    console.log(err.response?.data || err.message);
+    Alert.alert('Registration Failed', err.response?.data?.message || 'Server error');
+  }
+};
+
 
   return (
     <View style={styles.container}>

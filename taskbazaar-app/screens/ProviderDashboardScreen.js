@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, ActivityIndicator, Alert, TouchableOpacity
+  View, Text, FlatList, StyleSheet, ActivityIndicator, Alert, TouchableOpacity,  SafeAreaView,
+  Dimensions,
+
 } from 'react-native';
 import axios from 'axios';
 import MapView, { Marker } from 'react-native-maps';
@@ -8,27 +10,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Image } from 'react-native';
 import OSMMap from './OSMMap'; 
-
+import { API_BASE_URL } from '../config';
 export default function ProviderDashboardScreen({ navigation }) {
   const [location, setLocation] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assignedTasks, setAssignedTasks] = useState([]);
   const [showAssigned, setShowAssigned] = useState(false);
+  const { height } = Dimensions.get("window");
+  const [activeTab, setActiveTab] = useState("nearby"); // nearby or assigned
+
+  
+
 
 const fetchAssignedTasks = async () => {
+  const token = await AsyncStorage.getItem('token');
   try {
-    const token = await AsyncStorage.getItem('token');
-    const res = await axios.get('http://192.168.10.15:5000/api/tasks/assigned', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+    const res = await axios.get(`${API_BASE_URL}/api/tasks/assigned`, {
+      headers: { Authorization: `Bearer ${token}` }
     });
-    setAssignedTasks(res.data);
+
+    setAssignedTasks(res.data.tasks || []);
   } catch (err) {
-    console.error('Error fetching assigned tasks:', err);
+    console.error('Error fetching assigned tasks:', err.message);
   }
 };
+
+
+
 
 const logout = async (navigation) => {
   try {
@@ -44,7 +53,7 @@ const logout = async (navigation) => {
     try {
       const token = await AsyncStorage.getItem('token');
       const response = await axios.post(
-        `http://192.168.10.15:5000/api/tasks/${taskId}/accept`,
+        `${API_BASE_URL}/api/tasks/${taskId}/accept`,
         {},
         {
           headers: {
@@ -111,7 +120,7 @@ const logout = async (navigation) => {
     if (!location) return;
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await axios.get('http://192.168.10.15:5000/api/tasks/nearby', {
+      const res = await axios.get(`${API_BASE_URL}/api/tasks/nearby`, {
         params: {
           latitude: location.latitude,
           longitude: location.longitude,
@@ -138,7 +147,7 @@ const updateTaskStatus = async (taskId, newStatus) => {
   try {
     const token = await AsyncStorage.getItem('token');
     const res = await axios.put(
-      `http://192.168.10.15:5000/api/tasks/${taskId}/status`,
+      `${API_BASE_URL}/api/tasks/${taskId}/status`,
       { status: newStatus },
       {
         headers: {
@@ -161,14 +170,23 @@ const renderAssignedTask = ({ item }) => (
       <View style={[
         styles.statusBadge,
         {
-          backgroundColor: item.status === 'assigned' ? '#3B82F6'
-                          : item.status === 'completed' ? '#059669'
-                          : item.status === 'cancelled' ? '#EF4444' : '#10B981'
+          backgroundColor:
+            item.status === 'assigned' ? '#3B82F6'
+            : item.status === 'completed' ? '#059669'
+            : item.status === 'cancelled' ? '#EF4444'
+            : '#10B981'
         }
       ]}>
-        <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+        <Text style={styles.statusText}>{item.status?.toUpperCase()}</Text>
       </View>
     </View>
+
+    {/* Optional: Show who is assigned */}
+    {item.assignedEmployeeName && (
+      <Text style={{ fontStyle: 'italic', color: '#555' }}>
+        Assigned to: {item.assignedEmployeeName}
+      </Text>
+    )}
 
     <Text>{item.description}</Text>
 
@@ -177,22 +195,19 @@ const renderAssignedTask = ({ item }) => (
     </Text>
 
     <Text style={styles.locationText}>
-      📍 {item.location?.coordinates?.join(', ') || 'Unknown'}
+      📍 {item.location?.address || (item.location?.coordinates?.join(', ') || 'Unknown')}
     </Text>
 
-    {item.images?.map((img, idx) => (
+    {item.images?.map((img, index) => (
       <Image
-  key={idx}
-  source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
-  style={{ width: '100%', aspectRatio: 16/9, marginTop: 10, borderRadius: 6 }}
-  resizeMode="contain"
-/>
-
+        key={`${item._id}-img-${index}`} // stable key for images
+        source={{ uri: `${API_BASE_URL}/uploads/${img}` }}
+        style={{ width: '100%', aspectRatio: 16 / 9, marginTop: 10, borderRadius: 6 }}
+        resizeMode="contain"
+      />
     ))}
 
-    {/* Action buttons */}
     {['assigned', 'in-progress'].includes(item.status) && (
-
       <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' }}>
         <TouchableOpacity
           style={[styles.statusButton, { backgroundColor: '#059669', marginRight: 10 }]}
@@ -211,29 +226,29 @@ const renderAssignedTask = ({ item }) => (
         <TouchableOpacity
           style={[styles.statusButton, { backgroundColor: '#3B82F6', marginTop: 10 }]}
           onPress={async () => {
-                try {
-                  const token = await AsyncStorage.getItem('token');
-                  const res = await axios.get(`http://192.168.10.15:5000/api/chat/task/${item._id}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                  });
-          
-                  const chat = res.data;
-                  if (!chat || !chat._id) {
-                    Alert.alert('Chat not found for this task.');
-                    return;
-                  }
-          
-                  navigation.navigate('ChatScreen', {
-                    chatId: chat._id,
-                    taskId: item._id,
-                    taskTitle: item.title,
-                    otherParticipant: { name: 'Provider' }, // Update this with actual participant if needed
-                  });
-                } catch (err) {
-                  console.error('Error fetching chat:', err.message);
-                  Alert.alert('Error', 'Could not fetch chat for this task.');
-                }
-              }}
+            try {
+              const token = await AsyncStorage.getItem('token');
+              const res = await axios.get(`${API_BASE_URL}/api/chat/task/${item._id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+
+              const chat = res.data;
+              if (!chat || !chat._id) {
+                Alert.alert('Chat not found for this task.');
+                return;
+              }
+
+              navigation.navigate('ChatScreen', {
+                chatId: chat._id,
+                taskId: item._id,
+                taskTitle: item.title,
+                otherParticipant: { name: item.assignedEmployeeName || 'Provider' }
+              });
+            } catch (err) {
+              console.error('Error fetching chat:', err.message);
+              Alert.alert('Error', 'Could not fetch chat for this task.');
+            }
+          }}
         >
           <Text style={styles.statusButtonText}>💬 Chat</Text>
         </TouchableOpacity>
@@ -263,17 +278,20 @@ const renderAssignedTask = ({ item }) => (
     </Text>
 
     <Text style={styles.locationText}>
-      📍 {item.location?.coordinates?.join(', ') || 'Unknown'}
-    </Text>
+  📍 {item.location?.address || item.location?.coordinates?.join(', ') || 'Unknown'}
+</Text>
 
-    {item.images?.map((img, idx) => (
-      <Image
-        key={idx}
-        source={{ uri: `http://192.168.10.15:5000/uploads/${img}` }}
-        style={{ width: '100%', height: 200, marginTop: 10, borderRadius: 6 }}
-        resizeMode="cover"
-      />
-    ))}
+
+   {item.images?.map((img, index) => (
+  <Image
+    key={`${item._id}-${index}`}
+    source={{ uri: `${API_BASE_URL}/uploads/${img}` }}
+    style={{ width: '100%', aspectRatio: 16 / 9, marginTop: 10, borderRadius: 6 }}
+    resizeMode="contain"
+  />
+))}
+
+
 
     {item.status === 'open' && (
       <View style={styles.taskActions}>
@@ -288,7 +306,7 @@ const renderAssignedTask = ({ item }) => (
           onPress={async () => {
             try {
               const token = await AsyncStorage.getItem('token');
-              const res = await axios.get(`http://192.168.10.15:5000/api/chat/task/${item._id}`, {
+              const res = await axios.get(`${API_BASE_URL}/api/chat/task/${item._id}`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
               const chat = res.data;
@@ -328,215 +346,248 @@ const renderAssignedTask = ({ item }) => (
     );
   }
 
-  return (
-    
-    <View style={styles.container}>
-  <Text style={styles.header}>Nearby Tasks</Text>
+    return (
+  <SafeAreaView style={styles.container}>
+    {/* Header */}
+    <Text style={styles.header}>Tasks</Text>
 
-<View style={{ height: 300 }}>
+    {/* Tabs */}
+    <View style={styles.tabRow}>
+      <TouchableOpacity
+        style={[
+          styles.tabBtn,
+          activeTab === "nearby" && styles.activeTabBtn,
+        ]}
+        onPress={() => setActiveTab("nearby")}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            activeTab === "nearby" && styles.activeTabText,
+          ]}
+        >
+          Nearby Tasks
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.tabBtn,
+          activeTab === "assigned" && styles.activeTabBtn,
+        ]}
+        onPress={() => setActiveTab("assigned")}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            activeTab === "assigned" && styles.activeTabText,
+          ]}
+        >
+          Assigned Tasks
+        </Text>
+      </TouchableOpacity>
+    </View>
+
+    {/* Map */}
+    {activeTab === "nearby" && (
+      <View style={{ height: 300, marginHorizontal: 15, marginBottom: 10, borderRadius: 12, overflow: 'hidden', elevation: 2 }}>
   <OSMMap location={location} setLocation={setLocation} tasks={tasks} />
 </View>
 
-
+    )}
+{/* Content */}
+<View style={styles.listContainer}>
   <FlatList
-    data={tasks}
-    keyExtractor={(item) => item._id}
-    renderItem={renderTask}
-    contentContainerStyle={{ paddingBottom: 40 }}
-  />
+  data={activeTab === "nearby" ? tasks : assignedTasks}
+  keyExtractor={(item, index) => item._id ?? `item-${index}`}
+  renderItem={activeTab === "nearby" ? renderTask : renderAssignedTask}
+  contentContainerStyle={{ paddingBottom: 100 }}
+  showsVerticalScrollIndicator={false}
+/>
 
-  <TouchableOpacity
-    onPress={() => setShowAssigned(!showAssigned)}
-    style={styles.toggleAssignedBtn}
-  >
-    <Text style={styles.toggleAssignedText}>
-      {showAssigned ? 'Hide' : 'View'} Assigned Tasks
-    </Text>
-  </TouchableOpacity>
-
-  {showAssigned && (
-    <View style={styles.assignedContainer}>
-      <Text style={styles.subHeader}>Your Assigned Tasks</Text>
-      <FlatList
-        data={assignedTasks}
-        keyExtractor={(item) => item._id}
-        renderItem={renderAssignedTask}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      />
-    </View>
-  )}
-        <View style={{
-          justifyContent:'center', alignItems: 'center', marginTop: 20, marginBottom: 20
-        }}>
-          <TouchableOpacity 
-style={{
-  backgroundColor: '#3b82f6',
-  padding: 10,
-  width: '50%',
-  borderRadius: 18,
-}}
-onPress={() => navigation.navigate('CompanyDashboard')}>
-  <Text style={{
-    color: '#fff',
-    textAlign: 'center',}}>
-    View Company dashboard
-  </Text>
-</TouchableOpacity>
-        </View>
-  <View style={styles.buttonRow}>
-    <TouchableOpacity onPress={() => navigation.navigate('ChatList')} style={styles.chatBtn}>
-      <Text style={styles.chatBtnText}>💬 Messages</Text>
-    </TouchableOpacity>
-    <TouchableOpacity onPress={() => logout(navigation)} style={styles.logoutBtn}>
-      <Text style={styles.logoutText}>Logout</Text>
-    </TouchableOpacity>
-  </View>
 </View>
-  )
-}
+
+
+    {/* Fixed Footer Buttons */}
+    <View style={styles.footer}>
+      <TouchableOpacity
+        style={styles.footerBtn}
+        onPress={() => navigation.navigate("CompanyDashboard")}
+      >
+        <Text style={styles.footerBtnText}>Dashboard</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.footerBtn, styles.messageBtn]}
+        onPress={() => navigation.navigate("ChatList")}
+      >
+        <Text style={styles.footerBtnText}>💬 Messages</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.footerBtn, styles.logoutBtn]}
+        onPress={() => logout(navigation)}
+      >
+        <Text style={styles.footerBtnText}>Logout</Text>
+      </TouchableOpacity>
+    </View>
+  </SafeAreaView>
+);
+
+};
+
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
-    padding: 10,
+    backgroundColor: "#f9fafb", // Softer background
   },
-  toggleAssignedBtn: {
-  backgroundColor: '#3b82f6',
-  padding: 12,
-  borderRadius: 8,
-  alignItems: 'center',
-  marginVertical: 10,
-},
-
-toggleAssignedText: {
-  color: '#fff',
-  fontWeight: '600',
-  fontSize: 16,
-},
-
-assignedContainer: {
-  backgroundColor: '#f9fafb',
-  borderRadius: 10,
-  padding: 10,
-  marginTop: 10,
-},
-
-subHeader: {
-  fontSize: 18,
-  fontWeight: 'bold',
-  marginBottom: 10,
-}
-,
   header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 26,
+    fontWeight: "bold",
+    margin: 15,
+    color: "#111827",
   },
-  map: {
-    height: 250,
-    borderRadius: 10,
-    marginBottom: 15,
+  tabRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginHorizontal: 15,
+    marginBottom: 12,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    marginHorizontal: 5,
+    borderRadius: 25,
+    backgroundColor: "#e5e7eb",
+    alignItems: "center",
+    elevation: 2,
+  },
+  activeTabBtn: {
+    backgroundColor: "#2563eb",
+    shadowColor: "#2563eb",
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 4,
+  },
+  tabText: {
+    fontSize: 15,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  activeTabText: {
+    color: "#fff",
+  },
+  listContainer: {
+    flex: 1,
+    paddingHorizontal: 15,
+    paddingTop: 5,
   },
   taskCard: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
     elevation: 2,
+  },
+  taskHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
   },
   taskTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 5,
+    fontWeight: "700",
+    color: "#111827",
+    flex: 1,
+    marginRight: 10,
+  },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#fff",
   },
   locationText: {
-    fontStyle: 'italic',
-    color: '#6b7280',
-    marginTop: 5,
-  },
-  acceptBtn: {
-    marginTop: 10,
-    backgroundColor: '#2563eb',
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  acceptText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 8,
   },
   taskActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginTop: 10,
+    flexWrap: "wrap",
   },
-  loadingContainer: {
+  acceptBtn: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#10B981",
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    elevation: 2,
   },
-  logoutBtn: {
-  backgroundColor: '#ef4444',
-  padding: 10,
-  borderRadius: 6,
-  alignItems: 'center',
-  marginVertical: 10,
+  acceptText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  statusButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  statusButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+footer: {
+  flexDirection: "row",
+  paddingHorizontal: 10,
+  paddingVertical: 10,
+  backgroundColor: "#fff",
+  justifyContent: "space-between",
+  borderTopWidth: 1,
+  borderColor: "#e5e7eb",
+  elevation: 8,
+  paddingBottom: 20, // extra breathing room for gesture bar
+  // optionally add alignItems center for vertical alignment
+  alignItems: "center",
 },
-logoutText: {
-  color: '#fff',
-  fontWeight: 'bold',
-},
-taskHeader: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: 8,
-},
-statusBadge: {
-  paddingHorizontal: 8,
-  paddingVertical: 4,
+footerBtn: {
+  flex: 1,
+  marginHorizontal: 6,  // slightly more space between buttons
+  paddingVertical: 12,
+  backgroundColor: "#2563eb",
   borderRadius: 12,
+  alignItems: "center",
+  justifyContent: "center", // center text vertically
+  elevation: 2,
+  minHeight: 44, // consistent button height (optional)
 },
-statusText: {
-  color: '#fff',
-  fontSize: 10,
-  fontWeight: 'bold',
+footerBtnText: {
+  color: "#fff",
+  fontWeight: "bold",
+  fontSize: 14,
 },
-statusButton: {
-  padding: 10,
-  borderRadius: 6,
-  flex: 1,
-  alignItems: 'center',
-},
-statusButtonText: {
-  color: '#fff',
-  fontWeight: 'bold',
-},
-buttonRow: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  marginVertical: 10,
-},
-chatBtn: {
-  backgroundColor: '#10B981',
-  padding: 10,
-  borderRadius: 6,
-  flex: 1,
-  marginRight: 5,
-  alignItems: 'center',
-},
-chatBtnText: {
-  color: '#fff',
-  fontWeight: 'bold',
+messageBtn: {
+  backgroundColor: "#10B981",
 },
 logoutBtn: {
-  backgroundColor: '#ef4444',
-  padding: 10,
-  borderRadius: 6,
-  flex: 1,
-  marginLeft: 5,
-  alignItems: 'center',
+  backgroundColor: "#ef4444",
 },
 
-
 });
+
+
+
+
+

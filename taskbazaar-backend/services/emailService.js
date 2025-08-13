@@ -35,7 +35,6 @@ const emailTemplates = {
         <p>Please review the work and provide feedback if needed.</p>
         <p>Thank you for using TaskBazaar!</p>
         <br>
-        <p style="color: #666; font-size: 12px;">This is an automated notification from TaskBazaar.</p>
       </div>
     `
   }),
@@ -50,7 +49,6 @@ const emailTemplates = {
         <p>If you have any questions, please contact our support team.</p>
         <p>Thank you for using TaskBazaar!</p>
         <br>
-        <p style="color: #666; font-size: 12px;">This is an automated notification from TaskBazaar.</p>
       </div>
     `
   })

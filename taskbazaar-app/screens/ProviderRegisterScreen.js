@@ -6,7 +6,7 @@ import MapView, { Marker, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import OSMMap from './OSMMap'; // Adjust path if needed
-
+import { API_BASE_URL } from '../config';
 export default function ProviderRegisterScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -51,7 +51,7 @@ export default function ProviderRegisterScreen({ navigation }) {
     }
 
     try {
-      await axios.post('http://192.168.10.15:5000/api/auth/register', {
+      await axios.post(`${API_BASE_URL}/api/auth/register`, {
         name,
         email,
         password,

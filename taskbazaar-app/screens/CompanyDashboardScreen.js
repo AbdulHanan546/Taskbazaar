@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 const CompanyDashboardScreen = () => {
   const [employees, setEmployees] = useState([]);
   const [name, setName] = useState('');
@@ -38,30 +39,11 @@ useEffect(() => {
   const fetchAssignedEmployees = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
-
-      const res = await axios.get(
-        "http://192.168.10.15:5000/api/tasks/assigned",
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      const tasks = res.data || [];
-
-      // Extract assigned employees from tasks
-      const uniqueEmployees = {};
-      tasks.forEach(task => {
-        if (task.assignedEmployee) {
-          uniqueEmployees[task.assignedEmployee._id] = {
-            id: task.assignedEmployee._id,
-            name: task.assignedEmployee.name,
-            email: task.assignedEmployee.email,
-            status: task.status
-          };
-        }
+      const res = await axios.get(`${API_BASE_URL}/api/tasks/assigned`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      setEmployees(Object.values(uniqueEmployees));
+      setEmployees(res.data.employees || []);
     } catch (err) {
       console.error("Fetch Error:", err.response?.data || err.message);
     }
@@ -73,6 +55,10 @@ useEffect(() => {
 
 
 
+
+
+
+
   const addEmployee = async () => {
   if (!name.trim() || !email.trim() || !profession.trim() || !cnic.trim() || !password.trim()) {
     Alert.alert('Error', 'Please fill in all fields');
@@ -80,7 +66,7 @@ useEffect(() => {
   }
 
   try {
-    const res = await axios.post('http://192.168.10.15:5000/api/auth/register', {
+    const res = await axios.post(`${API_BASE_URL}/api/auth/register`, {
       name,
       email,
       password,
