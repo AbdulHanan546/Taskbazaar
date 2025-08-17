@@ -27,7 +27,7 @@ const taskSchema = new mongoose.Schema({
   images: [String],
     userCompleted: { type: Boolean, default: false },
   providerCompleted: { type: Boolean, default: false },
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed','initiated'], default: 'pending' },
   stripePaymentIntentId: { type: String, default: null }, // store stripe intent
 }, { timestamps: true });
 

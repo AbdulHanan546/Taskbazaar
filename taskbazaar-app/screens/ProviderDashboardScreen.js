@@ -212,7 +212,7 @@ const renderAssignedTask = ({ item }) => (
 ]}>
   <Text style={styles.statusText}>
     {item.paymentStatus === 'completed' ? 'PAYMENT COMPLETED' :
-     item.paymentStatus === 'failed' ? 'PAYMENT FAILED' :
+     item.paymentStatus === 'initiated' ? 'PAYMENT In Progess' :
      item.status?.toUpperCase()}
   </Text>
 </View>
@@ -245,53 +245,54 @@ const renderAssignedTask = ({ item }) => (
       />
     ))}
 
-    {['assigned', 'in-progress'].includes(item.status) && (
-      <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' }}>
-        <TouchableOpacity
-          style={[styles.statusButton, { backgroundColor: '#059669', marginRight: 10 }]}
-          onPress={() => updateTaskStatus(item._id, 'completed')} // calls completeTask now
-        >
-          <Text style={styles.statusButtonText}>Mark Completed</Text>
-        </TouchableOpacity>
+    {['assigned', 'in-progress'].includes(item.status) && item.paymentStatus !== 'initiated' && (
+  <View style={{ flexDirection: 'row', marginTop: 10, flexWrap: 'wrap' }}>
+    <TouchableOpacity
+      style={[styles.statusButton, { backgroundColor: '#059669', marginRight: 10 }]}
+      onPress={() => updateTaskStatus(item._id, 'completed')}
+    >
+      <Text style={styles.statusButtonText}>Mark Completed</Text>
+    </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.statusButton, { backgroundColor: '#EF4444', marginRight: 10 }]}
-          onPress={() => updateTaskStatus(item._id, 'cancelled')}
-        >
-          <Text style={styles.statusButtonText}>Cancel Task</Text>
-        </TouchableOpacity>
+    <TouchableOpacity
+      style={[styles.statusButton, { backgroundColor: '#EF4444', marginRight: 10 }]}
+      onPress={() => updateTaskStatus(item._id, 'cancelled')}
+    >
+      <Text style={styles.statusButtonText}>Cancel Task</Text>
+    </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.statusButton, { backgroundColor: '#3B82F6', marginTop: 10 }]}
-          onPress={async () => {
-            try {
-              const token = await AsyncStorage.getItem('token');
-              const res = await axios.get(`${API_BASE_URL}/api/chat/task/${item._id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
+    <TouchableOpacity
+      style={[styles.statusButton, { backgroundColor: '#3B82F6', marginTop: 10 }]}
+      onPress={async () => {
+        try {
+          const token = await AsyncStorage.getItem('token');
+          const res = await axios.get(`${API_BASE_URL}/api/chat/task/${item._id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
-              const chat = res.data;
-              if (!chat || !chat._id) {
-                Alert.alert('Chat not found for this task.');
-                return;
-              }
+          const chat = res.data;
+          if (!chat || !chat._id) {
+            Alert.alert('Chat not found for this task.');
+            return;
+          }
 
-              navigation.navigate('ChatScreen', {
-                chatId: chat._id,
-                taskId: item._id,
-                taskTitle: item.title,
-                otherParticipant: { name: item.assignedEmployeeName || 'Provider' }
-              });
-            } catch (err) {
-              console.error('Error fetching chat:', err.message);
-              Alert.alert('Error', 'Could not fetch chat for this task.');
-            }
-          }}
-        >
-          <Text style={styles.statusButtonText}>💬 Chat</Text>
-        </TouchableOpacity>
-      </View>
-    )}
+          navigation.navigate('ChatScreen', {
+            chatId: chat._id,
+            taskId: item._id,
+            taskTitle: item.title,
+            otherParticipant: { name: item.assignedEmployeeName || 'Provider' }
+          });
+        } catch (err) {
+          console.error('Error fetching chat:', err.message);
+          Alert.alert('Error', 'Could not fetch chat for this task.');
+        }
+      }}
+    >
+      <Text style={styles.statusButtonText}>💬 Chat</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
   </View>
 );
 

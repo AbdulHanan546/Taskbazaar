@@ -184,12 +184,19 @@ exports.getNearbyTasks = async (req, res) => {
 
     const maxDistanceInMeters = 5000;
 
-    const serviceRegex = services.map(service => ({
-      $or: [
-        { title: { $regex: service, $options: 'i' } },
-        { description: { $regex: service, $options: 'i' } }
-      ]
-    }));
+    // ✅ Split services into keywords for partial matching
+    const serviceRegex = [];
+    services.forEach(service => {
+      const keywords = service.split(" "); // e.g., "laptop repair" → ["laptop", "repair"]
+      keywords.forEach(keyword => {
+        serviceRegex.push({
+          $or: [
+            { title: { $regex: keyword, $options: 'i' } },
+            { description: { $regex: keyword, $options: 'i' } }
+          ]
+        });
+      });
+    });
 
     const tasks = await Task.find({
       location: {
@@ -202,16 +209,15 @@ exports.getNearbyTasks = async (req, res) => {
         },
       },
       status: 'open',
-      ...(services.length > 0 && { $or: serviceRegex })
+      ...(serviceRegex.length > 0 && { $or: serviceRegex }) // ✅ match if any keyword matches
     });
 
-    const tasksWithAddresses = await Promise.all(tasks.map(async (task, i) => {
+    const tasksWithAddresses = await Promise.all(tasks.map(async (task) => {
       let address = task.location?.address || null;
 
       if (!address && task.location?.coordinates?.length === 2) {
         try {
-          // Slow down to avoid 429 errors
-          await sleep(300); 
+          await sleep(300); // avoid 429 errors
           address = await coordsToAddress(
             task.location.coordinates[0],
             task.location.coordinates[1]
@@ -249,7 +255,7 @@ exports.updateTaskStatus = async (req, res) => {
     const { status, providerId } = req.body;
 
     const task = await Task.findById(taskId).populate('user', 'email name');
-    
+
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -260,6 +266,12 @@ exports.updateTaskStatus = async (req, res) => {
     }
 
     const oldStatus = task.status;
+
+    // 🚫 Prevent cancellation if payment already initiated
+    if (status === 'cancelled' && task.paymentStatus === 'initiated') {
+      return res.status(400).json({ error: 'Task cannot be cancelled after payment has been initiated' });
+    }
+
     task.status = status;
 
     // If assigning to a provider, populate provider info
@@ -274,34 +286,34 @@ exports.updateTaskStatus = async (req, res) => {
 
     // Send email notification based on status change
     let emailSent = false;
-    
+
     if (status === 'assigned' && oldStatus === 'open') {
       const provider = await User.findById(providerId);
       if (provider && task.user.email) {
         emailSent = await sendTaskAssignedNotification(
-          task.user.email, 
-          task.title, 
+          task.user.email,
+          task.title,
           provider.name
         );
       }
     } else if (status === 'completed' && oldStatus === 'assigned') {
       if (task.user.email) {
         emailSent = await sendTaskCompletedNotification(
-          task.user.email, 
+          task.user.email,
           task.title
         );
       }
     } else if (status === 'cancelled') {
       if (task.user.email) {
         emailSent = await sendTaskCancelledNotification(
-          task.user.email, 
+          task.user.email,
           task.title
         );
       }
     }
 
-    res.json({ 
-      task, 
+    res.json({
+      task,
       emailSent,
       message: `Task status updated to ${status}${emailSent ? ' and notification sent' : ''}`
     });
@@ -311,6 +323,7 @@ exports.updateTaskStatus = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 const stripe = require('../stripe');
 
