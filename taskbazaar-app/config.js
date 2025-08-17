@@ -1,3 +1,3 @@
-const SERVER_IP = "192.168.10.15";
+const SERVER_IP = "your_ip";
 
 export const API_BASE_URL = `http://${SERVER_IP}:5000`;
